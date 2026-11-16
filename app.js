@@ -16,66 +16,118 @@ const state = {
   importOpen: false
 };
 
-const elements = {
-  board: document.getElementById("board"),
-  search: document.getElementById("search"),
-  priorityFilter: document.getElementById("priority-filter"),
-  sort: document.getElementById("sort"),
-  stats: document.getElementById("stats"),
-  totalCount: document.getElementById("total-count"),
-  doneCount: document.getElementById("done-count"),
-  activeCount: document.getElementById("active-count"),
-  progressBar: document.getElementById("progress-bar"),
-  progressText: document.getElementById("progress-text"),
-  newTaskButton: document.getElementById("new-task"),
-  importButton: document.getElementById("import-data"),
-  exportButton: document.getElementById("export-data"),
-  clearButton: document.getElementById("clear-done"),
-  taskDialog: document.getElementById("task-dialog"),
-  taskForm: document.getElementById("task-form"),
-  taskTitle: document.getElementById("task-title"),
-  taskNotes: document.getElementById("task-notes"),
-  taskTag: document.getElementById("task-tag"),
-  taskPriority: document.getElementById("task-priority"),
-  taskDue: document.getElementById("task-due"),
-  taskStatus: document.getElementById("task-status"),
-  dialogTitle: document.getElementById("dialog-title"),
-  importDialog: document.getElementById("import-dialog"),
-  importText: document.getElementById("import-text"),
-  importSubmit: document.getElementById("import-submit"),
-  deleteDialog: document.getElementById("delete-dialog"),
-  deleteName: document.getElementById("delete-name"),
-  deleteConfirm: document.getElementById("delete-confirm"),
-  message: document.getElementById("message")
-};
+const elements = {};
+
+function initElements() {
+  Object.assign(elements, {
+    board: document.getElementById("board"),
+    search: document.getElementById("search"),
+    priorityFilter: document.getElementById("priority-filter"),
+    sort: document.getElementById("sort"),
+    stats: document.getElementById("stats"),
+    totalCount: document.getElementById("total-count"),
+    doneCount: document.getElementById("done-count"),
+    activeCount: document.getElementById("active-count"),
+    progressBar: document.getElementById("progress-bar"),
+    progressText: document.getElementById("progress-text"),
+    newTaskButton: document.getElementById("new-task"),
+    importButton: document.getElementById("import-data"),
+    exportButton: document.getElementById("export-data"),
+    clearButton: document.getElementById("clear-done"),
+    taskDialog: document.getElementById("task-dialog"),
+    taskForm: document.getElementById("task-form"),
+    taskTitle: document.getElementById("task-title"),
+    taskNotes: document.getElementById("task-notes"),
+    taskTag: document.getElementById("task-tag"),
+    taskPriority: document.getElementById("task-priority"),
+    taskDue: document.getElementById("task-due"),
+    taskStatus: document.getElementById("task-status"),
+    dialogTitle: document.getElementById("dialog-title"),
+    importDialog: document.getElementById("import-dialog"),
+    importText: document.getElementById("import-text"),
+    importSubmit: document.getElementById("import-submit"),
+    deleteDialog: document.getElementById("delete-dialog"),
+    deleteName: document.getElementById("delete-name"),
+    deleteConfirm: document.getElementById("delete-confirm"),
+    message: document.getElementById("message")
+  });
+}
+
+function storageAvailable(storage) {
+  if (!storage) return false;
+  try {
+    const key = "__taskflow_storage_test__";
+    storage.setItem(key, "1");
+    storage.removeItem(key);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function primaryStorage() {
+  try {
+    if (storageAvailable(window.localStorage)) return window.localStorage;
+  } catch (_error) {
+    // Ignore and try the next option.
+  }
+  try {
+    if (storageAvailable(window.sessionStorage)) return window.sessionStorage;
+  } catch (_error) {
+    // Ignore and fall through.
+  }
+  return null;
+}
+
+function fallbackStorage() {
+  try {
+    if (primaryStorage() === window.localStorage && storageAvailable(window.sessionStorage)) {
+      return window.sessionStorage;
+    }
+  } catch (_error) {
+    // Ignore and fall through.
+  }
+  return null;
+}
 
 function safeStorage() {
-  try {
-    return window.localStorage;
-  } catch (_error) {
-    return null;
-  }
+  return primaryStorage();
 }
 
 function loadTasks() {
-  const storage = safeStorage();
-  if (!storage) return [];
-  try {
-    const raw = storage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter(isValidTask).map(normalizeTask) : [];
-  } catch (_error) {
-    return [];
+  const storages = [primaryStorage(), fallbackStorage()].filter(Boolean);
+  for (const storage of storages) {
+    try {
+      const raw = storage.getItem(STORAGE_KEY);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isValidTask).map(normalizeTask);
+      }
+    } catch (_error) {
+      // Try the next available storage.
+    }
   }
+  return [];
 }
 
 function saveTasks() {
-  const storage = safeStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
-  } catch (error) {
-    showMessage("Could not save locally: " + error.message, "error");
+  const storages = [primaryStorage(), fallbackStorage()].filter(Boolean);
+  if (storages.length === 0) return;
+  const data = JSON.stringify(state.tasks);
+  let saved = false;
+  let lastError = null;
+  for (const storage of storages) {
+    try {
+      storage.setItem(STORAGE_KEY, data);
+      saved = true;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!saved && lastError && typeof showMessage === "function" && elements && elements.message) {
+    showMessage("Could not save locally: " + lastError.message, "error");
   }
 }
 
@@ -194,6 +246,7 @@ function render() {
   });
 
   refreshCounts(tasks);
+  saveTasks();
 }
 
 function card(task) {
@@ -503,5 +556,27 @@ function setupEvents() {
   setupKeyboard();
 }
 
-setupEvents();
-render();
+function initApp() {
+  initElements();
+  setupEvents();
+  render();
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === STORAGE_KEY) {
+      state.tasks = loadTasks();
+      render();
+    }
+  });
+
+  window.addEventListener("beforeunload", saveTasks);
+  window.addEventListener("pagehide", saveTasks);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveTasks();
+  });
+}
+
+if (document.readyState !== "loading") {
+  initApp();
+} else {
+  document.addEventListener("DOMContentLoaded", initApp, { once: true });
+}
