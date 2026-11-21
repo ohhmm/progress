@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test:sync": "node --test tests/sync.mjs",
+    "test:browser": "playwright test tests/browser/sync.spec.mjs"
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.1",
+    "@neon/env": "^2.1.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "wrangler": "^4.163.0"
+  }
+}

@@ -1,0 +1,8 @@
+.neon
+node_modules/
+.env.local
+.dev.vars
+.wrangler/
+public/
+test-results/
+playwright-report/

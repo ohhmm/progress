@@ -283,7 +283,8 @@
   <header class="masthead">
     <div>
       <h1>Taskflow</h1>
-      <p>A standalone Kanban tracker with local persistence, filters, JSON import/export, and drag-and-drop columns.</p>
+      <p>A shared Kanban tracker with filters, JSON import/export, and drag-and-drop columns.</p>
+      <p id="sync-status" role="status" aria-live="polite">Connecting to shared board…</p>
     </div>
     <div class="badge-row">
       <span class="badge"><strong id="total-count">0</strong> total</span>
@@ -423,4 +424,5 @@
   </div>
 </dialog>
 
+<script src="sync.js"></script>
 <script src="app.js"></script>
