@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Taskflow — Shared Kanban board</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, sans-serif;
+      background: #f7f3ed;
+      color: #1f242c;
+    }
+    body { margin: 0; }
+    header, main { max-width: 64rem; margin: auto; padding: 1.5rem; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    header strong { font-size: 1.25rem; }
+    main { padding-block: clamp(3rem, 9vw, 8rem); }
+    h1, h2 { font-family: Georgia, serif; }
+    h1 { max-width: 14ch; margin: 0; font-size: clamp(2.8rem, 8vw, 5.5rem); line-height: 1; }
+    p { max-width: 48ch; line-height: 1.6; }
+    a { color: inherit; text-underline-offset: .2em; }
+    section {
+      margin-top: 3rem;
+      padding: 1.5rem;
+      max-width: 26rem;
+      border: 1px solid #dfd4c3;
+      border-radius: 1rem;
+      background: #fffaf3;
+    }
+    h2 { margin: 0; font-size: 1.75rem; }
+    .order {
+      display: inline-block;
+      padding: .75rem 1rem;
+      border-radius: .5rem;
+      background: #a83210;
+      color: #fff;
+      font-weight: 650;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { background: #171a1f; color: #f4efe6; }
+      section { border-color: #3b404b; background: #242933; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Taskflow</strong>
+    <a href="/board">Editor sign-in</a>
+  </header>
+  <main>
+    <h1>A shared board for your tasks</h1>
+    <p>Move tasks from Backlog to Doing to Done and keep your board in sync across devices.</p>
+    <p><a href="/view">Sign in with a social account to view the board</a></p>
+    <a href="https://github.com/ohhmm/taskflow">View on GitHub</a>
+    <section aria-labelledby="deployment">
+      <h2 id="deployment">Deployment service · $100</h2>
+      <p>Request setup of a Taskflow instance for your team.</p>
+      <a class="order" href="https://github.com/ohhmm/taskflow/issues/new?title=Taskflow%20deployment%20request">Request deployment</a>
+    </section>
+  </main>
+</body>
+</html>

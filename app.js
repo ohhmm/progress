@@ -112,6 +112,7 @@ function loadTasks() {
 }
 
 function saveTasks() {
+  if (typeof TaskSync !== "undefined") TaskSync.save(state.tasks);
   const storages = [primaryStorage(), fallbackStorage()].filter(Boolean);
   if (storages.length === 0) return;
   const data = JSON.stringify(state.tasks);
@@ -561,12 +562,10 @@ function initApp() {
   setupEvents();
   render();
 
-  window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) {
-      state.tasks = loadTasks();
-      render();
-    }
-  });
+  TaskSync.start(state.tasks, (tasks) => {
+    state.tasks = tasks.filter(isValidTask).map(normalizeTask);
+    render();
+  }, document.getElementById("sync-status"));
 
   window.addEventListener("beforeunload", saveTasks);
   window.addEventListener("pagehide", saveTasks);
