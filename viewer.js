@@ -52,6 +52,9 @@ export function renderViewerBoard(tasks) {
     const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).map(card).join("");
     return `<section><h3>${label}</h3>${cards || `<p>No ${kind}s</p>`}</section>`;
   }).join("");
+  const sections = Object.entries({ goal: "Goals", task: "Tasks", idea: "Ideas" }).map(([kind, label]) =>
+    `<details${kind === "goal" ? " open" : ""}><summary>${label}</summary><div class="columns">${columns(kind)}</div></details>`
+  ).join("");
   return new Response(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -74,10 +77,7 @@ export function renderViewerBoard(tasks) {
   <div><a href="/">Taskflow</a><h1>Read-only board</h1></div>
   <a href="/board" aria-label="Sign in to create a new task">New task</a>
 </header>
-<main>
-  <details open><summary>Goals</summary><div class="columns">${columns("goal")}</div></details>
-  <details><summary>Tasks</summary><div class="columns">${columns("task")}</div></details>
-</main>
+<main>${sections}</main>
 </html>`, {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }
   });
