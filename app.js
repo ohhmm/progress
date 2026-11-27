@@ -7,7 +7,8 @@ const STATUSES = [
   { id: "done", label: "Done", short: "Closed" }
 ];
 
-const BOARD_KINDS = { goal: "Goal", task: "Task", idea: "Idea" };
+const BOARD_KINDS = { idea: "Idea", goal: "Goal", task: "Task" };
+const CATEGORY_ORDER_KEY = "taskflow:category-order";
 const sections = new Map();
 
 const state = {
@@ -480,7 +481,6 @@ function setupSection(kind, label) {
   const root = template.content.firstElementChild.cloneNode(true);
   root.id = kind + "-management";
   root.dataset.kind = kind;
-  root.open = kind === "goal";
   root.querySelector("summary").textContent = label + "s";
   const control = (name) => root.querySelector(`[data-control="${name}"]`);
   const section = {
@@ -512,7 +512,92 @@ function setupSection(kind, label) {
   section.priorityFilter.addEventListener("change", render);
   section.sort.addEventListener("change", render);
   setupBoard(section.board, kind);
-  document.getElementById("board-sections").appendChild(root);
+
+}
+
+function loadCategoryOrder() {
+  const kinds = Object.keys(BOARD_KINDS);
+  try {
+    const saved = JSON.parse(safeStorage()?.getItem(CATEGORY_ORDER_KEY) ?? "null");
+    if (Array.isArray(saved) && new Set(saved).size === kinds.length &&
+        saved.length === kinds.length && kinds.every((kind) => saved.includes(kind))) return saved;
+  } catch (_error) {
+    // Use the default order when storage is unavailable or invalid.
+  }
+  return kinds;
+}
+
+function applyCategoryOrder(order) {
+  const container = document.getElementById("board-sections");
+  for (const [index, kind] of order.entries()) {
+    const { root } = sections.get(kind);
+    root.open = index === 0;
+    container.appendChild(root);
+  }
+}
+
+function setupCategoryOrder() {
+  const dialog = document.getElementById("category-dialog");
+  const form = document.getElementById("category-form");
+  const list = document.getElementById("category-order");
+  let order = loadCategoryOrder();
+  let draft;
+  applyCategoryOrder(order);
+
+  function renderOrder() {
+    list.textContent = "";
+    for (const [index, kind] of draft.entries()) {
+      const label = BOARD_KINDS[kind] + "s";
+      const item = document.createElement("li");
+      item.tabIndex = -1;
+      const row = document.createElement("div");
+      row.className = "category-order-row";
+      const name = document.createElement("span");
+      name.textContent = label;
+      const actions = document.createElement("div");
+      actions.className = "category-order-actions";
+      for (const [text, offset] of [["Up", -1], ["Down", 1]]) {
+        const next = index + offset;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.setAttribute("aria-label", `Move ${label} ${text.toLowerCase()}`);
+        button.disabled = next < 0 || next >= draft.length;
+        button.addEventListener("click", () => {
+          [draft[index], draft[next]] = [draft[next], draft[index]];
+          renderOrder();
+          list.children[next].focus();
+        });
+        actions.appendChild(button);
+      }
+      row.append(name, actions);
+      item.appendChild(row);
+      list.appendChild(item);
+    }
+  }
+
+  document.getElementById("edit-category-order").addEventListener("click", () => {
+    draft = [...order];
+    renderOrder();
+    dialog.showModal();
+  });
+  document.getElementById("cancel-category-order").addEventListener("click", () => dialog.close());
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    order = draft;
+    applyCategoryOrder(order);
+    dialog.close();
+    try {
+      const storage = safeStorage();
+      if (storage) {
+        storage.setItem(CATEGORY_ORDER_KEY, JSON.stringify(order));
+        return;
+      }
+    } catch (_error) {
+      // The edited order is still active on the current page.
+    }
+    showMessage("Category order could only be saved for this page.", "error");
+  });
 }
 
 function setupBoard(board, kind) {
@@ -575,6 +660,7 @@ function setupKeyboard() {
 
 function setupEvents() {
   for (const [kind, label] of Object.entries(BOARD_KINDS)) setupSection(kind, label);
+  setupCategoryOrder();
   elements.importSubmit.addEventListener("click", () => importTasks(elements.importDialog.dataset.kind));
 
   document.getElementById("cancel-task").addEventListener("click", closeEditor);

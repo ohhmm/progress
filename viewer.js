@@ -52,8 +52,8 @@ export function renderViewerBoard(tasks) {
     const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).map(card).join("");
     return `<section><h3>${label}</h3>${cards || `<p>No ${kind}s</p>`}</section>`;
   }).join("");
-  const sections = Object.entries({ goal: "Goals", task: "Tasks", idea: "Ideas" }).map(([kind, label]) =>
-    `<details${kind === "goal" ? " open" : ""}><summary>${label}</summary><div class="columns">${columns(kind)}</div></details>`
+  const sections = Object.entries({ idea: "Ideas", goal: "Goals", task: "Tasks" }).map(([kind, label]) =>
+    `<details${kind === "idea" ? " open" : ""}><summary>${label}</summary><div class="columns">${columns(kind)}</div></details>`
   ).join("");
   return new Response(`<!doctype html>
 <html lang="en">
