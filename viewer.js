@@ -39,7 +39,7 @@ const html = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 })[char]);
 
-export function renderViewerBoard(tasks) {
+export function renderViewerBoard(tasks, categories) {
   const labels = { backlog: "Backlog", doing: "Doing", done: "Done" };
   const card = task => `
       <article>
@@ -50,10 +50,10 @@ export function renderViewerBoard(tasks) {
       </article>`;
   const columns = (kind) => Object.entries(labels).map(([status, label]) => {
     const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).map(card).join("");
-    return `<section><h3>${label}</h3>${cards || `<p>No ${kind}s</p>`}</section>`;
+    return `<section><h3>${label}</h3>${cards || `<p>No items</p>`}</section>`;
   }).join("");
-  const sections = Object.entries({ idea: "Ideas", goal: "Goals", task: "Tasks" }).map(([kind, label]) =>
-    `<details${kind === "idea" ? " open" : ""}><summary>${label}</summary><div class="columns">${columns(kind)}</div></details>`
+  const sections = categories.map(({ id, name }, index) =>
+    `<details${index === 0 ? " open" : ""}><summary>${html(name)}</summary><div class="columns">${columns(id)}</div></details>`
   ).join("");
   return new Response(`<!doctype html>
 <html lang="en">

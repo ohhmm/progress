@@ -394,10 +394,30 @@
 <dialog id="category-dialog" aria-labelledby="category-dialog-title">
   <form id="category-form" class="dialog-body">
     <h2 id="category-dialog-title">Edit categories</h2>
+    <p class="hint">Adding or deleting a category updates the shared board immediately. Save changes to keep this browser’s order and colors.</p>
+    <div class="category-order-row">
+      <input id="new-category-name" aria-label="Category name" placeholder="Category name" maxlength="60">
+      <button id="add-category" type="button">Add category</button>
+    </div>
+    <p id="category-status" role="status" hidden></p>
     <ol id="category-order"></ol>
     <div class="dialog-actions">
       <button id="cancel-category-order" type="button">Cancel</button>
       <button class="primary" type="submit">Save changes</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="category-delete-dialog" aria-labelledby="category-delete-title">
+  <form id="category-delete-form" class="dialog-body">
+    <h2 id="category-delete-title">Delete category?</h2>
+    <label>Move its items to
+      <select id="category-destination" required></select>
+    </label>
+    <p id="category-delete-status" role="status" hidden></p>
+    <div class="dialog-actions">
+      <button id="cancel-category-delete" type="button">Cancel</button>
+      <button class="danger" type="submit">Move items and delete</button>
     </div>
   </form>
 </dialog>
