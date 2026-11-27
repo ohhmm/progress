@@ -28,6 +28,10 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await expect(a.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(a.locator("#new-task")).toBeHidden();
+    await expect(a.locator("#new-goal")).toBeVisible();
+    await a.locator("#goal-management summary").click();
+    await expect(a.locator("#new-goal")).toBeHidden();
+    await a.locator("#goal-management summary").click();
     const goalTitle = "Goal " + randomUUID();
     await a.locator("#new-goal").click();
     await a.locator("#task-title").fill(goalTitle);

@@ -115,8 +115,8 @@
   .progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-strong)); }
   .progress-label { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--fg-soft); font-size: 0.9rem; }
 
-  .goals, #task-management { margin-top: 20px; }
-  #task-management > summary { cursor: pointer; font-weight: 700; }
+  .board-section { margin-top: 20px; }
+  .board-section > summary { cursor: pointer; font-weight: 700; }
 
   .board {
     display: grid;
@@ -304,15 +304,15 @@
     </form>
   </header>
 
-  <section class="goals" aria-labelledby="goals-title">
+  <details class="board-section" id="goal-management" open>
+    <summary>Goals</summary>
     <header class="column-header">
-      <h2 id="goals-title">Goals</h2>
       <button id="new-goal" class="primary" type="button">New goal</button>
     </header>
     <div class="board" id="goal-list" aria-label="Goal board"></div>
-  </section>
+  </details>
 
-  <details id="task-management">
+  <details class="board-section" id="task-management">
     <summary>Tasks</summary>
     <div class="badge-row">
       <span class="badge"><strong id="total-count">0</strong> total</span>

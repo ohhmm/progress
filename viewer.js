@@ -62,6 +62,7 @@ export function renderViewerBoard(tasks) {
   body { max-width: 85rem; margin: auto; padding: 1.5rem; }
   a { color: inherit; }
   header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  details { margin-top: 1rem; }
   summary { cursor: pointer; font-weight: 700; }
   .columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
   article { border: 1px solid GrayText; border-radius: .75rem; padding: 1rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
@@ -74,7 +75,7 @@ export function renderViewerBoard(tasks) {
   <a href="/board" aria-label="Sign in to create a new task">New task</a>
 </header>
 <main>
-  <section aria-labelledby="goals-title"><h2 id="goals-title">Goals</h2><div class="columns">${columns("goal")}</div></section>
+  <details open><summary>Goals</summary><div class="columns">${columns("goal")}</div></details>
   <details><summary>Tasks</summary><div class="columns">${columns("task")}</div></details>
 </main>
 </html>`, {
