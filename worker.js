@@ -79,10 +79,22 @@ export class Board extends DurableObject {
       AND NOT EXISTS (
         SELECT 1 FROM tasks AS parent
         WHERE parent.id = json_extract(child.data, '$.parentId') AND parent.data IS NOT NULL
-          AND json_extract(parent.data, '$.kind') = CASE COALESCE(json_extract(child.data, '$.kind'), 'task')
-            WHEN 'goal' THEN 'idea' WHEN 'task' THEN 'goal' END
+          AND COALESCE(json_extract(parent.data, '$.kind'), 'task') <>
+              COALESCE(json_extract(child.data, '$.kind'), 'task')
       )
     `, ...bindings);
+  }
+
+  pruneParentCycle(id) {
+    this.sql.exec(`
+      WITH RECURSIVE ancestors(id) AS (
+        SELECT json_extract(data, '$.parentId') FROM tasks WHERE id = ?
+        UNION
+        SELECT json_extract(tasks.data, '$.parentId') FROM tasks JOIN ancestors ON tasks.id = ancestors.id
+      )
+      UPDATE tasks SET data = json_remove(data, '$.parentId') WHERE id = ?
+      AND EXISTS (SELECT 1 FROM ancestors WHERE id = ?)
+    `, id, id, id);
   }
 
   async changeCategory(request) {
@@ -184,6 +196,7 @@ export class Board extends DurableObject {
           this.sql.exec("INSERT INTO receipts VALUES (?)", op.id);
         }
         for (const id of changedLinks) this.pruneParentLinks(id);
+        for (const id of changedLinks) this.pruneParentCycle(id);
       });
     } else if (request.method !== "GET") {
       return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, POST" } });

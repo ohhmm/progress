@@ -210,13 +210,16 @@ test("parent links survive sync and are cleared when their parent is deleted", a
   const idea = { ...task(), kind: "idea" };
   const goal = { ...task(), kind: "goal", parentId: idea.id };
   const child = { ...task(), parentId: goal.id };
-  const unrelated = { ...task(), parentId: idea.id };
+  const unrelated = { ...task(), parentId: child.id };
   const entries = [idea, goal, child, unrelated];
   try {
     const created = await api(entries.slice().reverse().map(item => operation("create", item.id, item)));
     assert.equal(created.find(item => item.id === goal.id).parentId, idea.id);
     assert.equal(created.find(item => item.id === child.id).parentId, goal.id);
     assert.equal(created.find(item => item.id === unrelated.id).parentId, undefined);
+    const attemptedCycle = await api([operation("patch", idea.id, { parentId: child.id })]);
+    assert.equal(attemptedCycle.find(item => item.id === idea.id).parentId, undefined);
+    assert.equal(attemptedCycle.find(item => item.id === child.id).parentId, goal.id);
     const remaining = await api([operation("delete", goal.id)]);
     assert.equal(remaining.find(item => item.id === child.id).parentId, undefined);
     assert.equal(remaining.find(item => item.id === child.id).title, child.title);

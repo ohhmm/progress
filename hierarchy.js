@@ -1,11 +1,4 @@
-export function parentKind(kind) {
-  if (kind === "goal") return "idea";
-  if (kind === "task") return "goal";
-  return null;
-}
-
-export function childKind(kind) {
-  if (kind === "idea") return "goal";
-  if (kind === "goal") return "task";
-  return null;
+export function neighborKind(order, kind, offset) {
+  const index = order.indexOf(kind);
+  return index < 0 ? null : order[index + offset] ?? null;
 }

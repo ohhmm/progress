@@ -1,4 +1,4 @@
-import { childKind } from "./hierarchy.js";
+import { neighborKind } from "./hierarchy.js";
 import { compareRank } from "./rank.js";
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
@@ -42,13 +42,14 @@ const html = value => String(value ?? "").replace(/[&<>"']/g, char => ({
 })[char]);
 
 export function renderViewerBoard(tasks, categories, parentId) {
-  const visibleKinds = new Set(categories.map(({ id }) => id));
-  const parent = tasks.find(task => task.id === parentId && visibleKinds.has(childKind(task.kind)));
-  const child = parent ? childKind(parent.kind) : null;
+  const order = categories.map(({ id }) => id);
+  const nextKind = (task) => neighborKind(order, task.kind ?? "task", 1);
+  const parent = tasks.find(task => task.id === parentId && nextKind(task));
+  const child = parent ? nextKind(parent) : null;
   const labels = { backlog: "Backlog", doing: "Doing", done: "Done" };
   const card = task => {
     const title = html(task.title);
-    const heading = visibleKinds.has(childKind(task.kind))
+    const heading = nextKind(task)
       ? `<a href="/view?parent=${encodeURIComponent(task.id)}">${title}</a>`
       : title;
     return `
