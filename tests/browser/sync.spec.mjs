@@ -21,6 +21,7 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
   let goalId;
   let ideaId;
   let customItemId;
+  let parentIdeaId;
   try {
     await Promise.all([a.goto(new URL("/board", base).href), b.goto(new URL("/board", base).href)]);
     for (const page of [a, b]) {
@@ -154,9 +155,36 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await expect(mobileCategory).toHaveCount(0, { timeout: 15000 });
     await b.locator("#task-management summary").click();
     await expect(b.locator("#task-management h3", { hasText: itemTitle })).toBeVisible();
+    await ideas.locator("summary").click();
+    const parentTitle = "Parent idea " + randomUUID();
+    await ideas.getByRole("button", { name: "New idea" }).click();
+    await a.locator("#task-title").fill(parentTitle);
+    await a.locator('#task-form button[type="submit"]').click();
+    const parentCard = ideas.locator(".card").filter({ hasText: parentTitle });
+    parentIdeaId = await parentCard.getAttribute("data-id");
+    await goal.getByRole("button", { name: "Edit" }).click();
+    await a.getByRole("combobox", { name: "Idea", exact: true }).selectOption(parentIdeaId);
+    await a.locator('#task-form button[type="submit"]').click();
+    await tasks.locator("summary").click();
+    await cardA.getByRole("button", { name: "Edit" }).click();
+    await a.getByRole("combobox", { name: "Goal", exact: true }).selectOption(goalId);
+    await a.locator('#task-form button[type="submit"]').click();
+
+    await parentCard.getByRole("button", { name: parentTitle }).click();
+    await expect(goals.locator(".parent-scope-title")).toHaveText("Idea: " + parentTitle);
+    await expect(goal).toBeVisible();
+    await goal.getByRole("button", { name: goalTitle }).click();
+    await expect(tasks.locator(".parent-scope-title")).toHaveText("Goal: " + goalTitle);
+    await expect(cardA).toBeVisible();
+    await expect(secondCard).toHaveCount(0);
+    await tasks.getByRole("button", { name: "New task" }).click();
+    await expect(a.getByRole("combobox", { name: "Goal", exact: true })).toHaveValue(goalId);
+    await a.locator("#cancel-task").click();
+    await tasks.getByRole("button", { name: "Show all tasks" }).click();
+    await expect(secondCard).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
-    const ids = [taskId, secondTaskId, goalId, ideaId, customItemId].filter(Boolean);
+    const ids = [taskId, secondTaskId, goalId, ideaId, customItemId, parentIdeaId].filter(Boolean);
     if (ids.length) {
       const response = await desktop.request.post(base + "/api/tasks", {
         headers: { Origin: new URL(base).origin },

@@ -205,3 +205,22 @@ test("deleting a category moves its items and redirects delayed writes", async (
     await api([existing, delayed].map(entry => operation("delete", entry.id)));
   }
 });
+
+test("parent links survive sync and are cleared when their parent is deleted", async () => {
+  const idea = { ...task(), kind: "idea" };
+  const goal = { ...task(), kind: "goal", parentId: idea.id };
+  const child = { ...task(), parentId: goal.id };
+  const unrelated = { ...task(), parentId: idea.id };
+  const entries = [idea, goal, child, unrelated];
+  try {
+    const created = await api(entries.slice().reverse().map(item => operation("create", item.id, item)));
+    assert.equal(created.find(item => item.id === goal.id).parentId, idea.id);
+    assert.equal(created.find(item => item.id === child.id).parentId, goal.id);
+    assert.equal(created.find(item => item.id === unrelated.id).parentId, undefined);
+    const remaining = await api([operation("delete", goal.id)]);
+    assert.equal(remaining.find(item => item.id === child.id).parentId, undefined);
+    assert.equal(remaining.find(item => item.id === child.id).title, child.title);
+  } finally {
+    await api(entries.map(item => operation("delete", item.id)));
+  }
+});

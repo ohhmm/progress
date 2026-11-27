@@ -1,3 +1,4 @@
+import { childKind, parentKind } from "./hierarchy.js";
 import { compareRank, isRank, rankBetween, rankOf } from "./rank.js";
 
 const STORAGE_KEY = "taskflow:v1";
@@ -13,6 +14,7 @@ let categories = [
 ];
 const CATEGORY_SETTINGS_KEY = "taskflow:category-order";
 const sections = new Map();
+const selectedParents = new Map();
 
 const state = {
   tasks: loadTasks(),
@@ -33,6 +35,8 @@ function initElements() {
     taskPriority: document.getElementById("task-priority"),
     taskDue: document.getElementById("task-due"),
     taskStatus: document.getElementById("task-status"),
+    taskParent: document.getElementById("task-parent"),
+    taskParentLabel: document.getElementById("task-parent-label"),
     dialogTitle: document.getElementById("dialog-title"),
     importDialog: document.getElementById("import-dialog"),
     importText: document.getElementById("import-text"),
@@ -133,6 +137,7 @@ function normalizeTask(task) {
   return {
     ...(kindOf(task) !== "task" && { kind: task.kind }),
     ...(isRank(task.rank) && { rank: task.rank }),
+    ...(parentKind(kindOf(task)) && typeof task.parentId === "string" && { parentId: task.parentId }),
     id: task.id,
     title: task.title.trim().slice(0, 120),
     notes: String(task.notes || "").slice(0, 1000),
@@ -207,9 +212,39 @@ function showMessage(text, type = "info") {
   }, 2600);
 }
 
+function selectedParent(kind) {
+  const id = selectedParents.get(kind);
+  if (!id) return null;
+  const parent = state.tasks.find((item) => item.id === id && kindOf(item) === parentKind(kind));
+  if (!parent) selectedParents.delete(kind);
+  return parent;
+}
+
+function inScope(item, kind, parent) {
+  return kindOf(item) === kind && (!parent || item.parentId === parent.id);
+}
+
+function selectItem(item) {
+  const kind = childKind(kindOf(item));
+  const section = sections.get(kind);
+  if (!section) return;
+  if (kind === "goal") {
+    selectedParents.delete("task");
+    if (sections.has("task")) sections.get("task").root.open = false;
+  }
+  selectedParents.set(kind, item.id);
+  section.root.open = true;
+  render();
+  section.scopeTitle.focus({ preventScroll: true });
+  section.root.scrollIntoView({ block: "nearest" });
+}
+
 function render() {
   for (const [kind, section] of sections) {
-    const items = state.tasks.filter((item) => kindOf(item) === kind);
+    const parent = selectedParent(kind);
+    section.scope.hidden = !parent;
+    section.scopeTitle.textContent = parent ? `${itemLabel(kindOf(parent))}: ${parent.title}` : "";
+    const items = state.tasks.filter((item) => inScope(item, kind, parent));
     const total = items.length;
     const done = items.filter((item) => item.status === "done").length;
     const percent = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -252,7 +287,19 @@ function card(task) {
   header.className = "card-header";
 
   const title = document.createElement("h3");
-  title.textContent = task.title;
+  if (sections.has(childKind(kindOf(task)))) {
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "card-title-button";
+    select.textContent = task.title;
+    select.addEventListener("click", () => selectItem(task));
+    article.addEventListener("click", (event) => {
+      if (!event.target.closest("button, select, input, a")) selectItem(task);
+    });
+    title.appendChild(select);
+  } else {
+    title.textContent = task.title;
+  }
   header.appendChild(title);
 
   const priority = document.createElement("span");
@@ -359,6 +406,14 @@ function openEditor(taskId = null, initialStatus = "backlog", kind = "task") {
   elements.taskPriority.value = task ? task.priority : "medium";
   elements.taskDue.value = task ? task.due : "";
   elements.taskStatus.value = task ? task.status : initialStatus;
+  const parentType = parentKind(state.editorKind);
+  elements.taskParentLabel.parentElement.hidden = !sections.has(parentType);
+  elements.taskParentLabel.textContent = itemLabel(parentType);
+  const parents = state.tasks.filter((item) => kindOf(item) === parentType)
+    .sort((a, b) => a.title.localeCompare(b.title));
+  elements.taskParent.replaceChildren(new Option("Unlinked", ""), ...parents.map((item) => new Option(item.title, item.id)));
+  const parentId = task ? task.parentId : selectedParent(state.editorKind)?.id;
+  elements.taskParent.value = parents.some((item) => item.id === parentId) ? parentId : "";
   elements.taskDialog.showModal();
   window.setTimeout(() => elements.taskTitle.focus(), 0);
 }
@@ -385,7 +440,8 @@ function upsertTask(event) {
     tag: elements.taskTag.value.trim(),
     priority: elements.taskPriority.value,
     due: elements.taskDue.value,
-    status: elements.taskStatus.value
+    status: elements.taskStatus.value,
+    ...(parentKind(kind) && { parentId: elements.taskParent.value })
   };
 
   if (state.selectedTaskId) {
@@ -434,9 +490,11 @@ function deleteTask() {
 }
 
 function openImportDialog(kind, exporting) {
+  const parent = selectedParent(kind);
   elements.importDialog.dataset.kind = kind;
+  elements.importDialog.dataset.parentId = parent?.id ?? "";
   elements.importText.value = exporting
-    ? JSON.stringify(state.tasks.filter((item) => kindOf(item) === kind), null, 2)
+    ? JSON.stringify(state.tasks.filter((item) => inScope(item, kind, parent)), null, 2)
     : "";
   elements.importDialog.querySelector("h2").textContent = `Import/export ${sections.get(kind).name}`;
   elements.importDialog.showModal();
@@ -455,13 +513,19 @@ function importTasks(kind) {
     showMessage("JSON must be an array of items", "error");
     return;
   }
-  const others = state.tasks.filter((item) => kindOf(item) !== kind);
+  const parentId = elements.importDialog.dataset.parentId;
+  const parent = parentId ? selectedParent(kind) : null;
+  if (parentId && parent?.id !== parentId) {
+    showMessage("The parent selection changed. Reopen the import dialog.", "error");
+    return;
+  }
+  const others = state.tasks.filter((item) => !inScope(item, kind, parent));
   const usedIds = new Set(others.map((item) => item.id));
   const items = [];
   for (const item of parsed) {
     if (isValidTask(item) && kindOf(item) === kind && !usedIds.has(item.id)) {
       usedIds.add(item.id);
-      items.push(normalizeTask(item));
+      items.push(normalizeTask(parent ? { ...item, parentId: parent.id } : item));
     }
   }
   if (parsed.length && !items.length) {
@@ -477,7 +541,8 @@ function importTasks(kind) {
 
 function clearDone(kind) {
   const before = state.tasks.length;
-  state.tasks = state.tasks.filter((item) => item.status !== "done" || kindOf(item) !== kind);
+  const parent = selectedParent(kind);
+  state.tasks = state.tasks.filter((item) => item.status !== "done" || !inScope(item, kind, parent));
   saveTasks();
   showMessage(`Removed ${before - state.tasks.length} completed items`);
   render();
@@ -494,6 +559,8 @@ function setupSection(kind, name) {
   const section = {
     name,
     root,
+    scope: root.querySelector(".parent-scope"),
+    scopeTitle: root.querySelector(".parent-scope-title"),
     board: control("board"),
     search: control("search"),
     priorityFilter: control("priority-filter"),
@@ -505,6 +572,14 @@ function setupSection(kind, name) {
     progressText: control("progress-text")
   };
   sections.set(kind, section);
+  const clearScope = section.scope.querySelector("button");
+  clearScope.textContent = "Show all " + name.toLowerCase();
+  clearScope.addEventListener("click", () => {
+    selectedParents.delete(kind);
+    if (kind === "goal") selectedParents.delete("task");
+    render();
+    root.querySelector("summary").focus();
+  });
 
   const create = control("new-task");
   create.textContent = "New " + label.toLowerCase();

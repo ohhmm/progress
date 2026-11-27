@@ -49,7 +49,7 @@ async function serveBoard(request, env, viewer = false) {
     const response = await env.BOARD.getByName("taskflow").fetch(request);
     if (!viewer || !response.ok) return response;
     const { tasks, categories } = await response.json();
-    return renderViewerBoard(tasks, categories);
+    return renderViewerBoard(tasks, categories, new URL(request.url).searchParams.get("parent"));
   } catch (error) {
     console.error("Board storage failed", error);
     return Response.json({ error: "Board storage unavailable" }, { status: 503 });
@@ -68,6 +68,21 @@ export class Board extends DurableObject {
 
   categories() {
     return this.sql.exec("SELECT id, name FROM categories WHERE destination IS NULL ORDER BY rowid").toArray();
+  }
+
+  pruneParentLinks(id) {
+    const scope = id === undefined ? "" : "AND (child.id = ? OR json_extract(child.data, '$.parentId') = ?)";
+    const bindings = id === undefined ? [] : [id, id];
+    this.sql.exec(`
+      UPDATE tasks AS child SET data = json_remove(child.data, '$.parentId')
+      WHERE child.data IS NOT NULL AND json_extract(child.data, '$.parentId') <> '' ${scope}
+      AND NOT EXISTS (
+        SELECT 1 FROM tasks AS parent
+        WHERE parent.id = json_extract(child.data, '$.parentId') AND parent.data IS NOT NULL
+          AND json_extract(parent.data, '$.kind') = CASE COALESCE(json_extract(child.data, '$.kind'), 'task')
+            WHEN 'goal' THEN 'idea' WHEN 'task' THEN 'goal' END
+      )
+    `, ...bindings);
   }
 
   async changeCategory(request) {
@@ -107,6 +122,7 @@ export class Board extends DurableObject {
           "UPDATE tasks SET data = CASE WHEN ? = 'task' THEN json_remove(data, '$.kind') ELSE json_set(data, '$.kind', ?) END WHERE data IS NOT NULL AND COALESCE(json_extract(data, '$.kind'), 'task') = ?",
           change.destination, change.destination, change.id
         );
+        this.pruneParentLinks();
       } else {
         return new Response("Invalid category request", { status: 400 });
       }
@@ -129,7 +145,7 @@ export class Board extends DurableObject {
       } catch {
         return new Response("Invalid JSON", { status: 400 });
       }
-      const fields = new Set(["kind", "rank", "title", "notes", "tag", "priority", "due", "status", "created", "completedAt"]);
+      const fields = new Set(["kind", "rank", "parentId", "title", "notes", "tag", "priority", "due", "status", "created", "completedAt"]);
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(op =>
         !op || typeof op.id !== "string" || typeof op.taskId !== "string" ||
         !["create", "seed", "patch", "delete"].includes(op.type) ||
@@ -147,22 +163,27 @@ export class Board extends DurableObject {
         const destinations = new Map(this.sql.exec("SELECT id, destination FROM categories").toArray()
           .map(({ id, destination }) => [id, destination]));
         const fallback = this.categories()[0].id;
+        const changedLinks = new Set();
         for (const op of operations) {
           if (this.sql.exec("SELECT id FROM receipts WHERE id = ?", op.id).toArray().length) continue;
           const row = this.sql.exec("SELECT data FROM tasks WHERE id = ?", op.taskId).toArray()[0];
           if (op.type === "delete") {
+            changedLinks.add(op.taskId);
             this.sql.exec("INSERT INTO tasks VALUES (?, NULL) ON CONFLICT(id) DO UPDATE SET data = NULL", op.taskId);
           } else if ((!row && ["create", "seed"].includes(op.type)) || (row?.data && op.type === "patch")) {
-            const task = { ...(row?.data ? JSON.parse(row.data) : {}), ...op.patch, id: op.taskId };
+            const previous = row?.data ? JSON.parse(row.data) : {};
+            const task = { ...previous, ...op.patch, id: op.taskId };
             let kind = task.kind ?? "task";
             while (destinations.get(kind)) kind = destinations.get(kind);
             if (!destinations.has(kind)) kind = fallback;
             if (kind === "task") delete task.kind;
             else task.kind = kind;
+            if (task.parentId !== previous.parentId || (row?.data && task.kind !== previous.kind)) changedLinks.add(op.taskId);
             this.sql.exec("INSERT INTO tasks VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data", op.taskId, JSON.stringify(task));
           }
           this.sql.exec("INSERT INTO receipts VALUES (?)", op.id);
         }
+        for (const id of changedLinks) this.pruneParentLinks(id);
       });
     } else if (request.method !== "GET") {
       return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, POST" } });
