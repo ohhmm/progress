@@ -71,13 +71,14 @@ export class Board extends DurableObject {
       } catch {
         return new Response("Invalid JSON", { status: 400 });
       }
-      const fields = new Set(["title", "notes", "tag", "priority", "due", "status", "created", "completedAt"]);
+      const fields = new Set(["kind", "title", "notes", "tag", "priority", "due", "status", "created", "completedAt"]);
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(op =>
         !op || typeof op.id !== "string" || typeof op.taskId !== "string" ||
         !["create", "seed", "patch", "delete"].includes(op.type) ||
         (op.type !== "delete" && (!op.patch || typeof op.patch !== "object" || Array.isArray(op.patch) ||
           Object.entries(op.patch).some(([key, value]) => !fields.has(key) ||
             (["created", "completedAt"].includes(key) ? value !== null && !Number.isSafeInteger(value) : typeof value !== "string")) ||
+          ("kind" in op.patch && op.patch.kind !== "goal") ||
           ("status" in op.patch && !["backlog", "doing", "done"].includes(op.patch.status)) ||
           ("priority" in op.patch && !["high", "medium", "low"].includes(op.patch.priority)) ||
           (["create", "seed"].includes(op.type) && !op.patch.title))))) {

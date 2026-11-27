@@ -115,6 +115,10 @@
   .progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-strong)); }
   .progress-label { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--fg-soft); font-size: 0.9rem; }
 
+  .goals, #task-management { margin-top: 20px; }
+  #task-management > summary { cursor: pointer; font-weight: 700; }
+  #goal-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+
   .board {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -283,83 +287,94 @@
   <header class="masthead">
     <div>
       <h1>Taskflow</h1>
-      <p>A shared Kanban tracker with filters, JSON import/export, and drag-and-drop columns.</p>
+      <p>A shared board for goals and tasks.</p>
       <p id="sync-status" role="status" aria-live="polite">Connecting to shared board…</p>
     </div>
+  </header>
+
+  <section class="goals" aria-labelledby="goals-title">
+    <header class="column-header">
+      <h2 id="goals-title">Goals</h2>
+      <button id="new-goal" class="primary" type="button">New goal</button>
+    </header>
+    <div id="goal-list"></div>
+  </section>
+
+  <details id="task-management">
+    <summary>Tasks</summary>
     <div class="badge-row">
       <span class="badge"><strong id="total-count">0</strong> total</span>
       <span class="badge"><strong id="active-count">0</strong> active</span>
       <span class="badge"><strong id="done-count">0</strong> done</span>
     </div>
-  </header>
-
-  <section class="toolbar">
-    <input id="search" type="search" placeholder="Search tasks (/)" aria-label="Search tasks">
-    <select id="priority-filter" aria-label="Filter by priority">
-      <option value="all">All priorities</option>
-      <option value="high">High</option>
-      <option value="medium">Medium</option>
-      <option value="low">Low</option>
-    </select>
-    <select id="sort" aria-label="Sort tasks">
-      <option value="manual">Manual order</option>
-      <option value="due">Due date</option>
-      <option value="priority">Priority</option>
-      <option value="created">Newest first</option>
-    </select>
-    <button id="new-task" class="primary" type="button">New task</button>
-  </section>
-
-  <section class="progress-label">
-    <span>Project progress</span>
-    <span id="progress-text">0% complete</span>
-  </section>
-  <div class="progress"><span id="progress-bar" style="width: 0%"></span></div>
-
-  <section class="board" id="board">
-    <section class="column" data-status="backlog" aria-label="Backlog">
-      <header class="column-header">
-        <h2>Backlog <span class="count" data-count="backlog">0</span></h2>
-        <button class="ghost" data-new-status="backlog" type="button">Add</button>
-      </header>
-      <div class="column-body"></div>
+    <section class="toolbar">
+      <input id="search" type="search" placeholder="Search tasks (/)" aria-label="Search tasks">
+      <select id="priority-filter" aria-label="Filter by priority">
+        <option value="all">All priorities</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <select id="sort" aria-label="Sort tasks">
+        <option value="manual">Manual order</option>
+        <option value="due">Due date</option>
+        <option value="priority">Priority</option>
+        <option value="created">Newest first</option>
+      </select>
+      <button id="new-task" class="primary" type="button">New task</button>
     </section>
-    <section class="column" data-status="doing" aria-label="In progress">
-      <header class="column-header">
-        <h2>Doing <span class="count" data-count="doing">0</span></h2>
-        <button class="ghost" data-new-status="doing" type="button">Add</button>
-      </header>
-      <div class="column-body"></div>
-    </section>
-    <section class="column" data-status="done" aria-label="Done">
-      <header class="column-header">
-        <h2>Done <span class="count" data-count="done">0</span></h2>
-        <button class="ghost" data-new-status="done" type="button">Add</button>
-      </header>
-      <div class="column-body"></div>
-    </section>
-  </section>
 
-  <section class="panel">
-    <article>
-      <h2>JSON import/export</h2>
-      <p>Use this to move task lists between browsers or back up data.</p>
-      <div class="button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        <button id="export-data" type="button">Export</button>
-        <button id="import-data" type="button">Import</button>
-        <button id="clear-done" type="button">Clear done</button>
-      </div>
-      <p class="hint">Keyboard: <kbd>N</kbd> new task, <kbd>/</kbd> search, <kbd>Esc</kbd> close.</p>
-    </article>
-    <article>
-      <h2>Working rules</h2>
-      <ul>
-        <li>Drop a card onto another column to change status.</li>
-        <li>Use priorities to triage risks.</li>
-        <li>Keep dependency-heavy work in Backlog until scope is clear.</li>
-      </ul>
-    </article>
-  </section>
+    <section class="progress-label">
+      <span>Task progress</span>
+      <span id="progress-text">0% complete</span>
+    </section>
+    <div class="progress"><span id="progress-bar" style="width: 0%"></span></div>
+
+    <section class="board" id="board">
+      <section class="column" data-status="backlog" aria-label="Backlog">
+        <header class="column-header">
+          <h2>Backlog <span class="count" data-count="backlog">0</span></h2>
+          <button class="ghost" data-new-status="backlog" type="button">Add</button>
+        </header>
+        <div class="column-body"></div>
+      </section>
+      <section class="column" data-status="doing" aria-label="In progress">
+        <header class="column-header">
+          <h2>Doing <span class="count" data-count="doing">0</span></h2>
+          <button class="ghost" data-new-status="doing" type="button">Add</button>
+        </header>
+        <div class="column-body"></div>
+      </section>
+      <section class="column" data-status="done" aria-label="Done">
+        <header class="column-header">
+          <h2>Done <span class="count" data-count="done">0</span></h2>
+          <button class="ghost" data-new-status="done" type="button">Add</button>
+        </header>
+        <div class="column-body"></div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <article>
+        <h2>JSON import/export</h2>
+        <p>Use this to move task lists between browsers or back up data.</p>
+        <div class="button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <button id="export-data" type="button">Export</button>
+          <button id="import-data" type="button">Import</button>
+          <button id="clear-done" type="button">Clear done</button>
+        </div>
+        <p class="hint">Keyboard: <kbd>N</kbd> new task, <kbd>/</kbd> search, <kbd>Esc</kbd> close.</p>
+      </article>
+      <article>
+        <h2>Working rules</h2>
+        <ul>
+          <li>Drop a card onto another column to change status.</li>
+          <li>Use priorities to triage risks.</li>
+          <li>Keep dependency-heavy work in Backlog until scope is clear.</li>
+        </ul>
+      </article>
+    </section>
+  </details>
 </div>
 
 <div id="message" class="message" role="status" aria-live="polite"></div>

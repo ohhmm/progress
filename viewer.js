@@ -40,14 +40,18 @@ const html = value => String(value ?? "").replace(/[&<>"']/g, char => ({
 })[char]);
 
 export function renderViewerBoard(tasks) {
-  const columns = Object.entries({ backlog: "Backlog", doing: "Doing", done: "Done" }).map(([status, label]) => {
-    const cards = tasks.filter(task => task.status === status).map(task => `
+  const labels = { backlog: "Backlog", doing: "Doing", done: "Done" };
+  const card = task => `
       <article>
         <h3>${html(task.title)}</h3>
+        ${task.kind === "goal" ? `<p>${html(labels[task.status])}</p>` : ""}
         <p>${[task.tag, task.priority, task.due].filter(Boolean).map(html).join(" · ")}</p>
         ${task.notes ? `<p class="notes">${html(task.notes)}</p>` : ""}
         <a href="/board" aria-label="Sign in to edit ${html(task.title)}">Edit</a>
-      </article>`).join("");
+      </article>`;
+  const goals = tasks.filter(task => task.kind === "goal").map(card).join("");
+  const columns = Object.entries(labels).map(([status, label]) => {
+    const cards = tasks.filter(task => task.status === status && task.kind !== "goal").map(card).join("");
     return `<section><h2>${label}</h2>${cards || "<p>No tasks</p>"}</section>`;
   }).join("");
   return new Response(`<!doctype html>
@@ -60,17 +64,21 @@ export function renderViewerBoard(tasks) {
   body { max-width: 85rem; margin: auto; padding: 1.5rem; }
   a { color: inherit; }
   header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-  main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+  summary { cursor: pointer; font-weight: 700; }
+  .columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
   article { border: 1px solid GrayText; border-radius: .75rem; padding: 1rem; margin-bottom: 1rem; overflow-wrap: anywhere; }
   h3 { margin-top: 0; }
   .notes { white-space: pre-wrap; }
-  @media (max-width: 46rem) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 46rem) { .columns { grid-template-columns: 1fr; } }
 </style>
 <header>
   <div><a href="/">Taskflow</a><h1>Read-only board</h1></div>
   <a href="/board" aria-label="Sign in to create a new task">New task</a>
 </header>
-<main>${columns}</main>
+<main>
+  <section aria-labelledby="goals-title"><h2 id="goals-title">Goals</h2>${goals || "<p>No goals yet</p>"}</section>
+  <details><summary>Tasks</summary><div class="columns">${columns}</div></details>
+</main>
 </html>`, {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }
   });

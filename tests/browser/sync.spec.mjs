@@ -16,10 +16,24 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
   a.on("pageerror", error => errors.push(error.message));
   b.on("pageerror", error => errors.push(error.message));
   let taskId;
+  let goalId;
   try {
     await Promise.all([a.goto(new URL("/board", base).href), b.goto(new URL("/board", base).href)]);
     await expect(a.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
+    await expect(a.locator("#new-task")).toBeHidden();
+    const goalTitle = "Goal " + randomUUID();
+    await a.locator("#new-goal").click();
+    await a.locator("#task-title").fill(goalTitle);
+    await a.locator('#task-form button[type="submit"]').click();
+    const goal = a.locator("#goal-list .card").filter({ hasText: goalTitle });
+    goalId = await goal.getAttribute("data-id");
+    await expect(b.locator("#goal-list h3", { hasText: goalTitle })).toBeVisible({ timeout: 15000 });
+    await goal.locator(".status-select").selectOption("done");
+    await expect(b.locator("#goal-list .card").filter({ hasText: goalTitle }).locator(".status-select"))
+      .toHaveValue("done", { timeout: 15000 });
+    await a.locator("#task-management summary").click();
+    await b.locator("#task-management summary").click();
     await a.locator("#new-task").click();
     await a.locator("#task-title").fill(title);
     await a.locator('#task-form button[type="submit"]').click();
@@ -29,6 +43,8 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await cardA.locator(".status-select").selectOption("doing");
     await expect(b.locator('[data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await b.reload();
+    await expect(b.locator("#new-task")).toBeHidden();
+    await b.locator("#task-management summary").click();
     await expect(b.locator('[data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await mobile.setOffline(true);
     await b.locator(`.card[data-id="${taskId}"] .status-select`).selectOption("done");
@@ -39,10 +55,11 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 15000 });
     expect(errors).toEqual([]);
   } finally {
-    if (taskId) {
+    const ids = [taskId, goalId].filter(Boolean);
+    if (ids.length) {
       const response = await desktop.request.post(base + "/api/tasks", {
         headers: { Origin: new URL(base).origin },
-        data: [{ id: randomUUID(), type: "delete", taskId }]
+        data: ids.map(taskId => ({ id: randomUUID(), type: "delete", taskId }))
       });
       expect(response.status()).toBe(200);
     }
