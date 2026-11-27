@@ -98,12 +98,18 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await b.reload();
     await expect(a.locator('#task-management [data-status="done"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 15000 });
-    await a.getByRole("button", { name: "Edit category order" }).click();
+    await a.getByRole("button", { name: "Edit categories" }).click();
     await a.getByRole("button", { name: "Move Goals up" }).click();
-    await a.getByRole("button", { name: "Save order" }).click();
+    await a.getByLabel("Goals background color").fill("#245f93");
+    await a.getByRole("button", { name: "Save changes" }).click();
     await a.reload();
     await expect(a.locator("#board-sections > details > summary")).toHaveText(["Goals", "Ideas", "Tasks"]);
     await expect(a.locator("#board-sections > details[open] > summary")).toHaveText(["Goals"]);
+    await expect(a.locator("#goal-management")).toHaveAttribute("style", /--category-background: #245f93/);
+    await a.getByRole("button", { name: "Edit categories" }).click();
+    await a.getByRole("button", { name: "Reset Goals background" }).click();
+    await a.getByRole("button", { name: "Save changes" }).click();
+    await expect(a.locator("#goal-management")).not.toHaveAttribute("style", /--category-background/);
     await expect(b.locator("#board-sections > details > summary")).toHaveText(["Ideas", "Goals", "Tasks"]);
     expect(errors).toEqual([]);
   } finally {

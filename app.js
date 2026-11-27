@@ -8,7 +8,7 @@ const STATUSES = [
 ];
 
 const BOARD_KINDS = { idea: "Idea", goal: "Goal", task: "Task" };
-const CATEGORY_ORDER_KEY = "taskflow:category-order";
+const CATEGORY_SETTINGS_KEY = "taskflow:category-order";
 const sections = new Map();
 
 const state = {
@@ -515,38 +515,47 @@ function setupSection(kind, label) {
 
 }
 
-function loadCategoryOrder() {
+function loadCategorySettings() {
   const kinds = Object.keys(BOARD_KINDS);
   try {
-    const saved = JSON.parse(safeStorage()?.getItem(CATEGORY_ORDER_KEY) ?? "null");
-    if (Array.isArray(saved) && new Set(saved).size === kinds.length &&
-        saved.length === kinds.length && kinds.every((kind) => saved.includes(kind))) return saved;
+    const saved = JSON.parse(safeStorage()?.getItem(CATEGORY_SETTINGS_KEY) ?? "null");
+    const order = Array.isArray(saved) ? saved : saved?.order;
+    const colors = Object.fromEntries(kinds.flatMap((kind) => {
+      const color = saved?.colors?.[kind];
+      return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? [[kind, color]] : [];
+    }));
+    if (Array.isArray(order) && order.length === kinds.length && kinds.every((kind) => order.includes(kind))) {
+      return { order, colors };
+    }
+    return { order: kinds, colors };
   } catch (_error) {
-    // Use the default order when storage is unavailable or invalid.
+    return { order: kinds, colors: {} };
   }
-  return kinds;
 }
 
-function applyCategoryOrder(order) {
+function applyCategorySettings({ order, colors }, reorder) {
   const container = document.getElementById("board-sections");
   for (const [index, kind] of order.entries()) {
     const { root } = sections.get(kind);
-    root.open = index === 0;
-    container.appendChild(root);
+    root.style.setProperty("--category-background", colors[kind] || "");
+    if (reorder) {
+      root.open = index === 0;
+      container.appendChild(root);
+    }
   }
 }
 
-function setupCategoryOrder() {
+function setupCategorySettings() {
   const dialog = document.getElementById("category-dialog");
   const form = document.getElementById("category-form");
   const list = document.getElementById("category-order");
-  let order = loadCategoryOrder();
+  let settings = loadCategorySettings();
   let draft;
-  applyCategoryOrder(order);
+  applyCategorySettings(settings, true);
 
-  function renderOrder() {
+  function renderSettings() {
     list.textContent = "";
-    for (const [index, kind] of draft.entries()) {
+    for (const [index, kind] of draft.order.entries()) {
       const label = BOARD_KINDS[kind] + "s";
       const item = document.createElement("li");
       item.tabIndex = -1;
@@ -562,41 +571,64 @@ function setupCategoryOrder() {
         button.type = "button";
         button.textContent = text;
         button.setAttribute("aria-label", `Move ${label} ${text.toLowerCase()}`);
-        button.disabled = next < 0 || next >= draft.length;
+        button.disabled = next < 0 || next >= draft.order.length;
         button.addEventListener("click", () => {
-          [draft[index], draft[next]] = [draft[next], draft[index]];
-          renderOrder();
+          [draft.order[index], draft.order[next]] = [draft.order[next], draft.order[index]];
+          renderSettings();
           list.children[next].focus();
         });
         actions.appendChild(button);
       }
       row.append(name, actions);
-      item.appendChild(row);
+      const colorRow = document.createElement("div");
+      colorRow.className = "category-color";
+      const color = document.createElement("input");
+      color.type = "color";
+      color.value = draft.colors[kind] || "#808080";
+      color.setAttribute("aria-label", label + " background color");
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.textContent = "Reset background";
+      reset.setAttribute("aria-label", "Reset " + label + " background");
+      reset.disabled = !draft.colors[kind];
+      color.addEventListener("input", () => {
+        draft.colors[kind] = color.value;
+        reset.disabled = false;
+      });
+      reset.addEventListener("click", () => {
+        delete draft.colors[kind];
+        color.value = "#808080";
+        reset.disabled = true;
+        color.focus();
+      });
+      colorRow.append(color, reset);
+      item.append(row, colorRow);
       list.appendChild(item);
     }
   }
 
   document.getElementById("edit-category-order").addEventListener("click", () => {
-    draft = [...order];
-    renderOrder();
+    draft = { order: [...settings.order], colors: { ...settings.colors } };
+    renderSettings();
     dialog.showModal();
   });
   document.getElementById("cancel-category-order").addEventListener("click", () => dialog.close());
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    order = draft;
-    applyCategoryOrder(order);
+    const reordered = settings.order.some((kind, index) => kind !== draft.order[index]);
+    settings = draft;
+    applyCategorySettings(settings, reordered);
     dialog.close();
     try {
       const storage = safeStorage();
       if (storage) {
-        storage.setItem(CATEGORY_ORDER_KEY, JSON.stringify(order));
+        storage.setItem(CATEGORY_SETTINGS_KEY, JSON.stringify(settings));
         return;
       }
     } catch (_error) {
-      // The edited order is still active on the current page.
+      // The edited settings are still active on the current page.
     }
-    showMessage("Category order could only be saved for this page.", "error");
+    showMessage("Category settings could only be saved for this page.", "error");
   });
 }
 
@@ -660,7 +692,7 @@ function setupKeyboard() {
 
 function setupEvents() {
   for (const [kind, label] of Object.entries(BOARD_KINDS)) setupSection(kind, label);
-  setupCategoryOrder();
+  setupCategorySettings();
   elements.importSubmit.addEventListener("click", () => importTasks(elements.importDialog.dataset.kind));
 
   document.getElementById("cancel-task").addEventListener("click", closeEditor);
