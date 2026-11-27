@@ -141,6 +141,16 @@
     background: var(--bg-raised);
   }
   .column-header h2 { margin: 0; font-size: 1.1rem; }
+  .column > .column-header h2 { display: flex; align-items: center; gap: .5rem; }
+  .column-header .count {
+    min-width: 1.5em;
+    padding: .15em .4em;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--fg-soft);
+    font: 600 .75rem system-ui, sans-serif;
+    text-align: center;
+  }
   .column-body {
     min-height: 180px;
     padding: 14px;
