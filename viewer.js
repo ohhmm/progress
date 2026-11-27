@@ -8,6 +8,34 @@ function decodeBase64Url(value) {
   return Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), char => char.charCodeAt(0));
 }
 
+export function viewerConfigured(env) {
+  return Boolean(env.VIEWER_ACCESS_ISSUER && env.VIEWER_ACCESS_AUD);
+}
+
+export function viewerAccessPage(configured) {
+  const explanation = configured
+    ? "Ask the board owner to approve your account for shared viewing."
+    : "Shared viewing is unavailable on this deployment.";
+  return new Response(`<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared board · Progress</title>
+<style>
+  :root { color-scheme: light dark; font: 1rem system-ui, sans-serif; }
+  main { max-width: 34rem; margin: 10vh auto; padding: 1.5rem; }
+</style>
+<main>
+  <h1>Shared board</h1>
+  <p>${explanation}</p>
+  <a href="/">Back to Progress</a>
+</main>
+</html>`, {
+    status: 403,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }
+  });
+}
+
 export async function hasViewerAccess(request, env) {
   const token = request.headers.get("Cf-Access-Jwt-Assertion");
   const issuer = env.VIEWER_ACCESS_ISSUER;
@@ -57,7 +85,7 @@ export function renderViewerBoard(tasks, categories, parentId) {
         <h4>${heading}</h4>
         <p>${[task.tag, task.priority, task.due].filter(Boolean).map(html).join(" · ")}</p>
         ${task.notes ? `<p class="notes">${html(task.notes)}</p>` : ""}
-        <a href="/board" aria-label="Sign in to edit ${html(task.title)}">Edit</a>
+        <a href="/board" aria-label="Open the editor for ${html(task.title)}">Edit</a>
       </article>`;
   };
   const columns = (kind) => Object.entries(labels).map(([status, label]) => {
@@ -74,7 +102,7 @@ export function renderViewerBoard(tasks, categories, parentId) {
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Taskflow — Read-only board</title>
+<title>Progress — Read-only board</title>
 <style>
   :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
   body { max-width: 85rem; margin: auto; padding: 1.5rem; }
@@ -89,8 +117,8 @@ export function renderViewerBoard(tasks, categories, parentId) {
   @media (max-width: 46rem) { .columns { grid-template-columns: 1fr; } }
 </style>
 <header>
-  <div><a href="/">Taskflow</a><h1>Read-only board</h1></div>
-  <a href="/board" aria-label="Sign in to create a new task">New task</a>
+  <div><a href="/">Progress</a><h1>Read-only board</h1></div>
+  <a href="/board" aria-label="Open the editor to create a task">New task</a>
 </header>
 <main>${sections}</main>
 </html>`, {

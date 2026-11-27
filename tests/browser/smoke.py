@@ -12,7 +12,7 @@ def run():
     time.sleep(1)
     title = d.title()
     print("title:", title)
-    assert "Taskflow" in title, title
+    assert "Progress" in title, title
     # create task
     btn = d.find("css selector", "#new-task")
     d.click(btn)
