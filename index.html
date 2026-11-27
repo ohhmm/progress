@@ -116,6 +116,11 @@
   .progress-label { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--fg-soft); font-size: 0.9rem; }
 
   .board-section { margin-top: 20px; }
+  .board-settings { display: flex; justify-content: flex-end; margin-top: 20px; }
+  #category-order { padding-inline-start: 1.5rem; margin-block: 0; }
+  #category-order li + li { margin-top: .5rem; }
+  .category-order-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  .category-order-actions { display: flex; gap: .5rem; }
   .board-section > summary { cursor: pointer; font-weight: 700; }
 
   .board {
@@ -304,6 +309,9 @@
     </form>
   </header>
 
+  <div class="board-settings">
+    <button id="edit-category-order" type="button">Edit category order</button>
+  </div>
   <div id="board-sections"></div>
 </div>
 
@@ -374,6 +382,17 @@
 </template>
 
 <div id="message" class="message" role="status" aria-live="polite"></div>
+
+<dialog id="category-dialog" aria-labelledby="category-dialog-title">
+  <form id="category-form" class="dialog-body">
+    <h2 id="category-dialog-title">Edit category order</h2>
+    <ol id="category-order"></ol>
+    <div class="dialog-actions">
+      <button id="cancel-category-order" type="button">Cancel</button>
+      <button class="primary" type="submit">Save order</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="task-dialog">
   <form id="task-form" class="dialog-body">

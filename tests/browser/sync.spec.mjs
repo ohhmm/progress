@@ -35,7 +35,11 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
       await expect(section.locator("[data-control]")).toHaveCount(14);
     }
     await expect(tasks.getByRole("button", { name: "New task" })).toBeHidden();
-    await expect(ideas.getByRole("button", { name: "New idea" })).toBeHidden();
+    await expect(a.locator("#board-sections > details > summary")).toHaveText(["Ideas", "Goals", "Tasks"]);
+    await expect(ideas.getByRole("button", { name: "New idea" })).toBeVisible();
+    await expect(goals.getByRole("button", { name: "New goal" })).toBeHidden();
+    await goals.locator("summary").click();
+    await b.locator("#goal-management summary").click();
     await expect(goals.getByRole("button", { name: "New goal" })).toBeVisible();
     await goals.locator("summary").click();
     await expect(goals.getByRole("button", { name: "New goal" })).toBeHidden();
@@ -52,8 +56,6 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
       .toHaveValue("done", { timeout: 15000 });
     await expect(goals.locator('[data-control="progress-text"]')).toHaveText("100% complete");
 
-    await ideas.locator("summary").click();
-    await b.locator("#idea-management summary").click();
     const ideaTitle = "Idea " + randomUUID();
     ideaId = randomUUID();
     await ideas.getByRole("button", { name: "Import" }).click();
@@ -96,6 +98,13 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await b.reload();
     await expect(a.locator('#task-management [data-status="done"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 15000 });
+    await a.getByRole("button", { name: "Edit category order" }).click();
+    await a.getByRole("button", { name: "Move Goals up" }).click();
+    await a.getByRole("button", { name: "Save order" }).click();
+    await a.reload();
+    await expect(a.locator("#board-sections > details > summary")).toHaveText(["Goals", "Ideas", "Tasks"]);
+    await expect(a.locator("#board-sections > details[open] > summary")).toHaveText(["Goals"]);
+    await expect(b.locator("#board-sections > details > summary")).toHaveText(["Ideas", "Goals", "Tasks"]);
     expect(errors).toEqual([]);
   } finally {
     const ids = [taskId, goalId, ideaId].filter(Boolean);
