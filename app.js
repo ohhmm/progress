@@ -1,4 +1,4 @@
-import { childKind, parentKind } from "./hierarchy.js";
+import { neighborKind } from "./hierarchy.js";
 import { compareRank, isRank, rankBetween, rankOf } from "./rank.js";
 
 const STORAGE_KEY = "taskflow:v1";
@@ -15,6 +15,7 @@ let categories = [
 const CATEGORY_SETTINGS_KEY = "taskflow:category-order";
 const sections = new Map();
 const selectedParents = new Map();
+let categoryOrder = [];
 
 const state = {
   tasks: loadTasks(),
@@ -137,7 +138,7 @@ function normalizeTask(task) {
   return {
     ...(kindOf(task) !== "task" && { kind: task.kind }),
     ...(isRank(task.rank) && { rank: task.rank }),
-    ...(parentKind(kindOf(task)) && typeof task.parentId === "string" && { parentId: task.parentId }),
+    ...(typeof task.parentId === "string" && { parentId: task.parentId }),
     id: task.id,
     title: task.title.trim().slice(0, 120),
     notes: String(task.notes || "").slice(0, 1000),
@@ -181,6 +182,26 @@ function itemLabel(kind) {
   return Object.hasOwn(ITEM_LABELS, kind) ? ITEM_LABELS[kind] : "Item";
 }
 
+function parentLabel(kind) {
+  return Object.hasOwn(ITEM_LABELS, kind) ? ITEM_LABELS[kind] : sections.get(kind)?.name ?? "Parent";
+}
+
+function parentOptions(kind, task) {
+  const current = task?.parentId;
+  const parentType = neighborKind(categoryOrder, kind, -1);
+  const byId = new Map(state.tasks.map((item) => [item.id, item]));
+  return state.tasks.filter((candidate) => {
+    if (kindOf(candidate) === kind || (kindOf(candidate) !== parentType && candidate.id !== current)) return false;
+    if (!task) return true;
+    const visited = new Set();
+    for (let item = candidate; item && !visited.has(item.id); item = byId.get(item.parentId)) {
+      if (item.id === task.id) return false;
+      visited.add(item.id);
+    }
+    return true;
+  }).sort((a, b) => a.title.localeCompare(b.title));
+}
+
 function filteredTasks(items, { search, priorityFilter, sort }) {
   const term = search.value.trim().toLowerCase();
   const priority = priorityFilter.value;
@@ -215,7 +236,7 @@ function showMessage(text, type = "info") {
 function selectedParent(kind) {
   const id = selectedParents.get(kind);
   if (!id) return null;
-  const parent = state.tasks.find((item) => item.id === id && kindOf(item) === parentKind(kind));
+  const parent = state.tasks.find((item) => item.id === id && kindOf(item) === neighborKind(categoryOrder, kind, -1));
   if (!parent) selectedParents.delete(kind);
   return parent;
 }
@@ -224,14 +245,20 @@ function inScope(item, kind, parent) {
   return kindOf(item) === kind && (!parent || item.parentId === parent.id);
 }
 
+function clearScopeFrom(kind, collapse) {
+  const index = categoryOrder.indexOf(kind);
+  if (index < 0) return;
+  for (const lowerKind of categoryOrder.slice(index)) {
+    selectedParents.delete(lowerKind);
+    if (collapse) sections.get(lowerKind).root.open = false;
+  }
+}
+
 function selectItem(item) {
-  const kind = childKind(kindOf(item));
+  const kind = neighborKind(categoryOrder, kindOf(item), 1);
   const section = sections.get(kind);
   if (!section) return;
-  if (kind === "goal") {
-    selectedParents.delete("task");
-    if (sections.has("task")) sections.get("task").root.open = false;
-  }
+  clearScopeFrom(kind, true);
   selectedParents.set(kind, item.id);
   section.root.open = true;
   render();
@@ -240,10 +267,11 @@ function selectItem(item) {
 }
 
 function render() {
-  for (const [kind, section] of sections) {
+  for (const kind of categoryOrder) {
+    const section = sections.get(kind);
     const parent = selectedParent(kind);
     section.scope.hidden = !parent;
-    section.scopeTitle.textContent = parent ? `${itemLabel(kindOf(parent))}: ${parent.title}` : "";
+    section.scopeTitle.textContent = parent ? `${parentLabel(kindOf(parent))}: ${parent.title}` : "";
     const items = state.tasks.filter((item) => inScope(item, kind, parent));
     const total = items.length;
     const done = items.filter((item) => item.status === "done").length;
@@ -287,7 +315,7 @@ function card(task) {
   header.className = "card-header";
 
   const title = document.createElement("h3");
-  if (sections.has(childKind(kindOf(task)))) {
+  if (neighborKind(categoryOrder, kindOf(task), 1)) {
     const select = document.createElement("button");
     select.type = "button";
     select.className = "card-title-button";
@@ -406,12 +434,14 @@ function openEditor(taskId = null, initialStatus = "backlog", kind = "task") {
   elements.taskPriority.value = task ? task.priority : "medium";
   elements.taskDue.value = task ? task.due : "";
   elements.taskStatus.value = task ? task.status : initialStatus;
-  const parentType = parentKind(state.editorKind);
-  elements.taskParentLabel.parentElement.hidden = !sections.has(parentType);
-  elements.taskParentLabel.textContent = itemLabel(parentType);
-  const parents = state.tasks.filter((item) => kindOf(item) === parentType)
-    .sort((a, b) => a.title.localeCompare(b.title));
-  elements.taskParent.replaceChildren(new Option("Unlinked", ""), ...parents.map((item) => new Option(item.title, item.id)));
+  const parentType = neighborKind(categoryOrder, state.editorKind, -1);
+  const parents = parentOptions(state.editorKind, task);
+  const current = parents.find((item) => item.id === task?.parentId);
+  elements.taskParentLabel.parentElement.hidden = !parentType && !current;
+  elements.taskParentLabel.textContent = current && parentType && kindOf(current) !== parentType
+    ? "Parent" : parentLabel(parentType ?? (current && kindOf(current)));
+  elements.taskParent.replaceChildren(new Option("Unlinked", ""), ...parents.map((item) =>
+    new Option(kindOf(item) === parentType ? item.title : `${parentLabel(kindOf(item))}: ${item.title}`, item.id)));
   const parentId = task ? task.parentId : selectedParent(state.editorKind)?.id;
   elements.taskParent.value = parents.some((item) => item.id === parentId) ? parentId : "";
   elements.taskDialog.showModal();
@@ -441,7 +471,7 @@ function upsertTask(event) {
     priority: elements.taskPriority.value,
     due: elements.taskDue.value,
     status: elements.taskStatus.value,
-    ...(parentKind(kind) && { parentId: elements.taskParent.value })
+    ...(!elements.taskParentLabel.parentElement.hidden && { parentId: elements.taskParent.value })
   };
 
   if (state.selectedTaskId) {
@@ -575,8 +605,7 @@ function setupSection(kind, name) {
   const clearScope = section.scope.querySelector("button");
   clearScope.textContent = "Show all " + name.toLowerCase();
   clearScope.addEventListener("click", () => {
-    selectedParents.delete(kind);
-    if (kind === "goal") selectedParents.delete("task");
+    clearScopeFrom(kind, false);
     render();
     root.querySelector("summary").focus();
   });
@@ -617,7 +646,8 @@ function activeOrder(order) {
 
 function applyCategorySettings({ order, colors }, reorder) {
   const container = document.getElementById("board-sections");
-  for (const [index, kind] of activeOrder(order).entries()) {
+  if (reorder) categoryOrder = activeOrder(order);
+  for (const [index, kind] of categoryOrder.entries()) {
     const { root } = sections.get(kind);
     root.style.setProperty("--category-background", colors[kind] || "");
     if (reorder) {
@@ -776,6 +806,7 @@ function setupCategorySettings() {
     const reordered = activeOrder(settings.order).some((kind, index) => kind !== draft.order[index]);
     settings = draft;
     applyCategorySettings(settings, reordered);
+    if (reordered) render();
     dialog.close();
     try {
       const storage = safeStorage();
