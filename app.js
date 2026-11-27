@@ -13,6 +13,7 @@ const state = {
   priorityFilter: "all",
   sort: "manual",
   selectedTaskId: null,
+  editorKind: "task",
   importOpen: false
 };
 
@@ -20,6 +21,8 @@ const elements = {};
 
 function initElements() {
   Object.assign(elements, {
+    taskManagement: document.getElementById("task-management"),
+    goalList: document.getElementById("goal-list"),
     board: document.getElementById("board"),
     search: document.getElementById("search"),
     priorityFilter: document.getElementById("priority-filter"),
@@ -140,6 +143,7 @@ function normalizeTask(task) {
   const status = STATUSES.some((item) => item.id === task.status) ? task.status : "backlog";
   const priority = ["high", "medium", "low"].includes(task.priority) ? task.priority : "medium";
   return {
+    ...(task.kind === "goal" && { kind: "goal" }),
     id: task.id,
     title: task.title.trim().slice(0, 120),
     notes: String(task.notes || "").slice(0, 1000),
@@ -176,10 +180,14 @@ function searchWeight(task) {
   return [task.title, task.notes, task.tag, task.status].join(" ").toLowerCase().includes(term);
 }
 
+function isGoal(item) {
+  return item.kind === "goal";
+}
+
 function filteredTasks() {
   let tasks = state.tasks.filter((task) => {
     const matchesPriority = state.priorityFilter === "all" || task.priority === state.priorityFilter;
-    return matchesPriority && searchWeight(task);
+    return !isGoal(task) && matchesPriority && searchWeight(task);
   });
 
   const compare = {
@@ -217,9 +225,19 @@ function showMessage(text, type = "info") {
 
 function render() {
   const tasks = filteredTasks();
-  const total = state.tasks.length;
-  const done = state.tasks.filter((task) => task.status === "done").length;
-  const active = state.tasks.filter((task) => task.status !== "done").length;
+  const goals = state.tasks.filter(isGoal);
+  elements.goalList.textContent = "";
+  for (const goal of goals) elements.goalList.appendChild(card(goal));
+  if (!goals.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No goals yet";
+    elements.goalList.appendChild(empty);
+  }
+  const allTasks = state.tasks.filter((item) => !isGoal(item));
+  const total = allTasks.length;
+  const done = allTasks.filter((task) => task.status === "done").length;
+  const active = total - done;
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
 
   elements.totalCount.textContent = total;
@@ -253,7 +271,7 @@ function render() {
 function card(task) {
   const article = document.createElement("article");
   article.className = "card";
-  article.draggable = true;
+  article.draggable = !isGoal(task);
   article.dataset.id = task.id;
   article.setAttribute("tabindex", "0");
 
@@ -353,10 +371,11 @@ function formatDate(value) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function openEditor(taskId = null, initialStatus = "backlog") {
+function openEditor(taskId = null, initialStatus = "backlog", kind = "task") {
   state.selectedTaskId = taskId;
   const task = taskId ? state.tasks.find((item) => item.id === taskId) : null;
-  elements.dialogTitle.textContent = task ? "Edit task" : "New task";
+  state.editorKind = task ? (isGoal(task) ? "goal" : "task") : kind;
+  elements.dialogTitle.textContent = (task ? "Edit " : "New ") + state.editorKind;
   elements.taskTitle.value = task ? task.title : "";
   elements.taskNotes.value = task ? task.notes : "";
   elements.taskTag.value = task ? task.tag : "";
@@ -375,8 +394,10 @@ function closeEditor() {
 function upsertTask(event) {
   event.preventDefault();
   const title = elements.taskTitle.value.trim();
+  const kind = state.editorKind;
+  const label = kind === "goal" ? "Goal" : "Task";
   if (!title) {
-    showMessage("Task title is required", "error");
+    showMessage(`${label} title is required`, "error");
     elements.taskTitle.focus();
     return;
   }
@@ -394,11 +415,11 @@ function upsertTask(event) {
     const task = state.tasks.find((item) => item.id === state.selectedTaskId);
     if (task) {
       Object.assign(task, patch, { completedAt: patch.status === "done" ? (task.completedAt || Date.now()) : null });
-      showMessage("Task updated");
+      showMessage(`${label} updated`);
     }
   } else {
-    state.tasks.unshift(normalizeTask({ ...patch, id: uid(), created: Date.now(), completedAt: patch.status === "done" ? Date.now() : null }));
-    showMessage("Task created");
+    state.tasks.unshift(normalizeTask({ ...patch, kind, id: uid(), created: Date.now(), completedAt: patch.status === "done" ? Date.now() : null }));
+    showMessage(`${label} created`);
   }
 
   saveTasks();
@@ -417,6 +438,7 @@ function updateTask(id, patch) {
 function confirmDelete(id) {
   const task = state.tasks.find((item) => item.id === id);
   if (!task) return;
+  elements.deleteDialog.querySelector("h2").textContent = isGoal(task) ? "Delete goal" : "Delete task";
   elements.deleteName.textContent = task.title;
   elements.deleteConfirm.dataset.id = id;
   elements.deleteDialog.showModal();
@@ -424,15 +446,16 @@ function confirmDelete(id) {
 
 function deleteTask() {
   const id = elements.deleteConfirm.dataset.id;
+  const deleted = state.tasks.find((task) => task.id === id);
   state.tasks = state.tasks.filter((task) => task.id !== id);
   saveTasks();
   elements.deleteDialog.close();
-  showMessage("Task deleted");
+  if (deleted) showMessage(isGoal(deleted) ? "Goal deleted" : "Task deleted");
   render();
 }
 
 function exportTasks() {
-  elements.importText.value = JSON.stringify(state.tasks, null, 2);
+  elements.importText.value = JSON.stringify(state.tasks.filter((item) => !isGoal(item)), null, 2);
   elements.importDialog.showModal();
   elements.importText.select();
 }
@@ -449,16 +472,19 @@ function importTasks() {
     showMessage("JSON must be an array of tasks", "error");
     return;
   }
-  state.tasks = parsed.filter(isValidTask).map(normalizeTask);
+  const goals = state.tasks.filter(isGoal);
+  const goalIds = new Set(goals.map((goal) => goal.id));
+  const tasks = parsed.filter(isValidTask).filter((item) => !goalIds.has(item.id) && !isGoal(item)).map(normalizeTask);
+  state.tasks = [...goals, ...tasks];
   saveTasks();
   elements.importDialog.close();
-  showMessage(`Imported ${state.tasks.length} tasks`);
+  showMessage(`Imported ${tasks.length} tasks`);
   render();
 }
 
 function clearDone() {
   const before = state.tasks.length;
-  state.tasks = state.tasks.filter((task) => task.status !== "done");
+  state.tasks = state.tasks.filter((task) => task.status !== "done" || isGoal(task));
   saveTasks();
   showMessage(`Removed ${before - state.tasks.length} completed tasks`);
   render();
@@ -510,12 +536,14 @@ function setupKeyboard() {
     }
     if (event.key === "/") {
       event.preventDefault();
+      elements.taskManagement.open = true;
       elements.search.focus();
     }
   });
 }
 
 function setupEvents() {
+  document.getElementById("new-goal").addEventListener("click", () => openEditor(null, "backlog", "goal"));
   elements.newTaskButton.addEventListener("click", () => openEditor());
   elements.exportButton.addEventListener("click", exportTasks);
   elements.importButton.addEventListener("click", () => {
