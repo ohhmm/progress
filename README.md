@@ -9,10 +9,12 @@ Install Node.js 22 or newer, then run:
 ```sh
 npm ci
 printf 'BOARD_PASSWORD=local-sync-test\n' > .dev.vars
-npm run dev
+npm run dev -- --local-protocol https
 ```
 
 Open the displayed URL in Chrome, Edge, Firefox, or Safari. Choose **Editor sign-in** and use the username `taskflow` with the password from `.dev.vars`.
+
+With the local HTTPS Worker running, run `npm run test:browser`.
 
 ## Deploy
 
