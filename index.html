@@ -304,56 +304,52 @@
     </form>
   </header>
 
-  <details class="board-section" id="goal-management" open>
-    <summary>Goals</summary>
-    <header class="column-header">
-      <button id="new-goal" class="primary" type="button">New goal</button>
-    </header>
-    <div class="board" id="goal-list" aria-label="Goal board"></div>
-  </details>
+  <div id="board-sections"></div>
+</div>
 
-  <details class="board-section" id="task-management">
-    <summary>Tasks</summary>
+<template id="kanban-section">
+  <details class="board-section">
+    <summary></summary>
     <div class="badge-row">
-      <span class="badge"><strong id="total-count">0</strong> total</span>
-      <span class="badge"><strong id="active-count">0</strong> active</span>
-      <span class="badge"><strong id="done-count">0</strong> done</span>
+      <span class="badge"><strong data-control="total-count">0</strong> total</span>
+      <span class="badge"><strong data-control="active-count">0</strong> active</span>
+      <span class="badge"><strong data-control="done-count">0</strong> done</span>
     </div>
     <section class="toolbar">
-      <input id="search" type="search" placeholder="Search tasks (/)" aria-label="Search tasks">
-      <select id="priority-filter" aria-label="Filter by priority">
+      <input data-control="search" type="search">
+      <select data-control="priority-filter" aria-label="Filter by priority">
         <option value="all">All priorities</option>
         <option value="high">High</option>
         <option value="medium">Medium</option>
         <option value="low">Low</option>
       </select>
-      <select id="sort" aria-label="Sort tasks">
+      <select data-control="sort">
         <option value="manual">Manual order</option>
         <option value="due">Due date</option>
         <option value="priority">Priority</option>
         <option value="created">Newest first</option>
       </select>
-      <button id="new-task" class="primary" type="button">New task</button>
+      <button data-control="new-task" class="primary" type="button"></button>
     </section>
 
     <section class="progress-label">
-      <span>Task progress</span>
-      <span id="progress-text">0% complete</span>
+      <span data-control="progress-label"></span>
+      <span data-control="progress-text">0% complete</span>
     </section>
-    <div class="progress"><span id="progress-bar" style="width: 0%"></span></div>
+    <div class="progress"><span data-control="progress-bar" style="width: 0%"></span></div>
 
-    <section class="board" id="board" aria-label="Task board"></section>
+    <section class="board" data-control="board"></section>
 
     <section class="panel">
       <article>
         <h2>JSON import/export</h2>
-        <p>Use this to move task lists between browsers or back up data.</p>
+        <p>Use this to move lists between browsers or back up data.</p>
         <div class="button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-          <button id="export-data" type="button">Export</button>
-          <button id="import-data" type="button">Import</button>
-          <button id="clear-done" type="button">Clear done</button>
+          <button data-control="export-data" type="button">Export</button>
+          <button data-control="import-data" type="button">Import</button>
+          <button data-control="clear-done" type="button">Clear done</button>
         </div>
-        <p class="hint">Keyboard: <kbd>N</kbd> new task, <kbd>/</kbd> search, <kbd>Esc</kbd> close.</p>
+        <p class="hint">Keyboard: <kbd>N</kbd> new item, <kbd>/</kbd> search, <kbd>Esc</kbd> close.</p>
       </article>
       <article>
         <h2>Working rules</h2>
@@ -365,7 +361,7 @@
       </article>
     </section>
   </details>
-</div>
+</template>
 
 <template id="kanban-column">
   <section class="column">
@@ -418,7 +414,7 @@
 <dialog id="import-dialog">
   <div class="dialog-body">
     <h2>Import/export JSON</h2>
-    <label>Task JSON
+    <label>JSON
       <textarea id="import-text" rows="10"></textarea>
     </label>
     <div class="dialog-actions">
