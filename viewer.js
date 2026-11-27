@@ -1,3 +1,4 @@
+import { childKind } from "./hierarchy.js";
 import { compareRank } from "./rank.js";
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
@@ -40,22 +41,34 @@ const html = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 })[char]);
 
-export function renderViewerBoard(tasks, categories) {
+export function renderViewerBoard(tasks, categories, parentId) {
+  const visibleKinds = new Set(categories.map(({ id }) => id));
+  const parent = tasks.find(task => task.id === parentId && visibleKinds.has(childKind(task.kind)));
+  const child = parent ? childKind(parent.kind) : null;
   const labels = { backlog: "Backlog", doing: "Doing", done: "Done" };
-  const card = task => `
+  const card = task => {
+    const title = html(task.title);
+    const heading = visibleKinds.has(childKind(task.kind))
+      ? `<a href="/view?parent=${encodeURIComponent(task.id)}">${title}</a>`
+      : title;
+    return `
       <article>
-        <h4>${html(task.title)}</h4>
+        <h4>${heading}</h4>
         <p>${[task.tag, task.priority, task.due].filter(Boolean).map(html).join(" · ")}</p>
         ${task.notes ? `<p class="notes">${html(task.notes)}</p>` : ""}
         <a href="/board" aria-label="Sign in to edit ${html(task.title)}">Edit</a>
       </article>`;
+  };
   const columns = (kind) => Object.entries(labels).map(([status, label]) => {
-    const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).sort(compareRank).map(card).join("");
+    const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind && (kind !== child || task.parentId === parent.id)).sort(compareRank).map(card).join("");
     return `<section><h3>${label}</h3>${cards || `<p>No items</p>`}</section>`;
   }).join("");
-  const sections = categories.map(({ id, name }, index) =>
-    `<details${index === 0 ? " open" : ""}><summary>${html(name)}</summary><div class="columns">${columns(id)}</div></details>`
-  ).join("");
+  const sections = categories.map(({ id, name }, index) => {
+    const selected = id === child;
+    const expanded = child ? selected : index === 0;
+    const scope = selected ? `<p><strong>${html(parent.title)}</strong> <a href="/view">Show all ${html(name.toLowerCase())}</a></p>` : "";
+    return `<details${expanded ? " open" : ""}><summary>${html(name)}</summary>${scope}<div class="columns">${columns(id)}</div></details>`;
+  }).join("");
   return new Response(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
