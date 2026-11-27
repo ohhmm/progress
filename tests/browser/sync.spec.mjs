@@ -35,8 +35,8 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     const goal = a.locator("#goal-list .card").filter({ hasText: goalTitle });
     goalId = await goal.getAttribute("data-id");
     await expect(b.locator("#goal-list h3", { hasText: goalTitle })).toBeVisible({ timeout: 15000 });
-    await goal.locator(".status-select").selectOption("done");
-    await expect(b.locator("#goal-list .card").filter({ hasText: goalTitle }).locator(".status-select"))
+    await goal.dragTo(a.locator('#goal-list [data-status="done"]'));
+    await expect(b.locator('#goal-list [data-status="done"] .card').filter({ hasText: goalTitle }).locator(".status-select"))
       .toHaveValue("done", { timeout: 15000 });
     await a.locator("#task-management summary").click();
     await b.locator("#task-management summary").click();
@@ -45,19 +45,19 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await a.locator('#task-form button[type="submit"]').click();
     const cardA = a.locator(".card").filter({ has: a.locator("h3", { hasText: title }) });
     taskId = await cardA.getAttribute("data-id");
-    await expect(b.locator('[data-status="backlog"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
+    await expect(b.locator('#board [data-status="backlog"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await cardA.locator(".status-select").selectOption("doing");
-    await expect(b.locator('[data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
+    await expect(b.locator('#board [data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await b.reload();
     await expect(b.locator("#new-task")).toBeHidden();
     await b.locator("#task-management summary").click();
-    await expect(b.locator('[data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
+    await expect(b.locator('#board [data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await mobile.setOffline(true);
     await b.locator(`.card[data-id="${taskId}"] .status-select`).selectOption("done");
     await expect(b.locator("#sync-status")).toContainText("Sync unavailable", { timeout: 20000 });
     await mobile.setOffline(false);
     await b.reload();
-    await expect(a.locator('[data-status="done"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
+    await expect(a.locator('#board [data-status="done"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 15000 });
     expect(errors).toEqual([]);
   } finally {

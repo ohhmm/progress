@@ -117,7 +117,6 @@
 
   .goals, #task-management { margin-top: 20px; }
   #task-management > summary { cursor: pointer; font-weight: 700; }
-  #goal-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
 
   .board {
     display: grid;
@@ -300,7 +299,7 @@
       <h2 id="goals-title">Goals</h2>
       <button id="new-goal" class="primary" type="button">New goal</button>
     </header>
-    <div id="goal-list"></div>
+    <div class="board" id="goal-list" aria-label="Goal board"></div>
   </section>
 
   <details id="task-management">
@@ -333,29 +332,7 @@
     </section>
     <div class="progress"><span id="progress-bar" style="width: 0%"></span></div>
 
-    <section class="board" id="board">
-      <section class="column" data-status="backlog" aria-label="Backlog">
-        <header class="column-header">
-          <h2>Backlog <span class="count" data-count="backlog">0</span></h2>
-          <button class="ghost" data-new-status="backlog" type="button">Add</button>
-        </header>
-        <div class="column-body"></div>
-      </section>
-      <section class="column" data-status="doing" aria-label="In progress">
-        <header class="column-header">
-          <h2>Doing <span class="count" data-count="doing">0</span></h2>
-          <button class="ghost" data-new-status="doing" type="button">Add</button>
-        </header>
-        <div class="column-body"></div>
-      </section>
-      <section class="column" data-status="done" aria-label="Done">
-        <header class="column-header">
-          <h2>Done <span class="count" data-count="done">0</span></h2>
-          <button class="ghost" data-new-status="done" type="button">Add</button>
-        </header>
-        <div class="column-body"></div>
-      </section>
-    </section>
+    <section class="board" id="board" aria-label="Task board"></section>
 
     <section class="panel">
       <article>
@@ -379,6 +356,16 @@
     </section>
   </details>
 </div>
+
+<template id="kanban-column">
+  <section class="column">
+    <header class="column-header">
+      <h2><span class="column-title"></span> <span class="count">0</span></h2>
+      <button class="ghost" type="button">Add</button>
+    </header>
+    <div class="column-body"></div>
+  </section>
+</template>
 
 <div id="message" class="message" role="status" aria-live="polite"></div>
 
