@@ -183,6 +183,8 @@
     gap: 10px;
   }
   .card.dragging { opacity: 0.55; }
+  .card.drop-before { box-shadow: 0 -4px 0 var(--accent); }
+  .card.drop-after { box-shadow: 0 4px 0 var(--accent); }
   .card-header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
   .card-header h3 { margin: 0; font-size: 1.02rem; line-height: 1.2; }
   .card-notes { margin: 0; color: var(--fg-soft); font-size: 0.9rem; line-height: 1.45; }
@@ -370,7 +372,7 @@
       <article>
         <h2>Working rules</h2>
         <ul>
-          <li>Drop a card onto another column to change status.</li>
+          <li>Drag cards up or down to rank them, or between columns to change status.</li>
           <li>Use priorities to triage risks.</li>
           <li>Keep dependency-heavy work in Backlog until scope is clear.</li>
         </ul>
@@ -483,4 +485,4 @@
 </dialog>
 
 <script src="sync.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>

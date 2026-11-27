@@ -1,3 +1,4 @@
+import { compareRank } from "./rank.js";
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
 const algorithm = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
@@ -49,7 +50,7 @@ export function renderViewerBoard(tasks, categories) {
         <a href="/board" aria-label="Sign in to edit ${html(task.title)}">Edit</a>
       </article>`;
   const columns = (kind) => Object.entries(labels).map(([status, label]) => {
-    const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).map(card).join("");
+    const cards = tasks.filter(task => task.status === status && (task.kind ?? "task") === kind).sort(compareRank).map(card).join("");
     return `<section><h3>${label}</h3>${cards || `<p>No items</p>`}</section>`;
   }).join("");
   const sections = categories.map(({ id, name }, index) =>
