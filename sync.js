@@ -11,6 +11,7 @@ const TaskSync = (() => {
   let apply;
   let timer;
   let sequence = 0;
+  let boardMode = false;
 
   function pending() {
     return Object.keys(storage).filter(key => key.startsWith(prefix)).sort()
@@ -54,16 +55,17 @@ const TaskSync = (() => {
         options.headers = { "Content-Type": "application/json" };
         options.body = JSON.stringify(entries.map(entry => entry.operation));
       }
-      const response = await fetch("/api/tasks", options);
+      const response = await fetch(boardMode ? "/api/board" : "/api/tasks", options);
       if (!response.ok) throw new Error("Sync failed");
-      const tasks = await response.json();
-      if (!Array.isArray(tasks)) throw new Error("Invalid board response");
+      const payload = await response.json();
+      const tasks = boardMode ? payload.tasks : payload;
+      if (!Array.isArray(tasks) || (boardMode && !Array.isArray(payload.categories))) throw new Error("Invalid board response");
       for (const entry of entries) storage.removeItem(entry.key);
       const remaining = pending();
       const merged = overlay(tasks, remaining);
       const changed = JSON.stringify(merged) !== JSON.stringify(previous);
       remember(merged);
-      if (changed) apply(merged);
+      if (changed || boardMode) apply(merged, payload.categories, changed);
       status.textContent = remaining.length ? "Saving…" : "All changes saved";
       status.dataset.state = remaining.length ? "pending" : "saved";
     } catch (_error) {
@@ -76,7 +78,11 @@ const TaskSync = (() => {
   }
 
   return {
-    start(tasks, onTasks, node) {
+    refresh() {
+      return sync();
+    },
+    start(tasks, onTasks, node, includeCategories = false) {
+      boardMode = includeCategories;
       status = node;
       apply = onTasks;
       remember(tasks);

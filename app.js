@@ -7,7 +7,10 @@ const STATUSES = [
   { id: "done", label: "Done", short: "Closed" }
 ];
 
-const BOARD_KINDS = { idea: "Idea", goal: "Goal", task: "Task" };
+const ITEM_LABELS = { idea: "Idea", goal: "Goal", task: "Task" };
+let categories = [
+  { id: "idea", name: "Ideas" }, { id: "goal", name: "Goals" }, { id: "task", name: "Tasks" }
+];
 const CATEGORY_SETTINGS_KEY = "taskflow:category-order";
 const sections = new Map();
 
@@ -164,7 +167,11 @@ function searchWeight(task, term) {
 }
 
 function kindOf(item) {
-  return ["goal", "idea"].includes(item.kind) ? item.kind : "task";
+  return typeof item.kind === "string" ? item.kind : "task";
+}
+
+function itemLabel(kind) {
+  return Object.hasOwn(ITEM_LABELS, kind) ? ITEM_LABELS[kind] : "Item";
 }
 
 function filteredTasks(items, { search, priorityFilter, sort }) {
@@ -234,7 +241,7 @@ function renderBoard(board, items, kind) {
     } else {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = `No ${status} ${kind}s`;
+      empty.textContent = `No ${status} ${itemLabel(kind).toLowerCase()}s`;
       body.appendChild(empty);
     }
   }
@@ -347,7 +354,7 @@ function openEditor(taskId = null, initialStatus = "backlog", kind = "task") {
   state.selectedTaskId = taskId;
   const task = taskId ? state.tasks.find((item) => item.id === taskId) : null;
   state.editorKind = task ? kindOf(task) : kind;
-  elements.dialogTitle.textContent = (task ? "Edit " : "New ") + state.editorKind;
+  elements.dialogTitle.textContent = (task ? "Edit " : "New ") + itemLabel(state.editorKind).toLowerCase();
   elements.taskTitle.value = task ? task.title : "";
   elements.taskNotes.value = task ? task.notes : "";
   elements.taskTag.value = task ? task.tag : "";
@@ -367,7 +374,7 @@ function upsertTask(event) {
   event.preventDefault();
   const title = elements.taskTitle.value.trim();
   const kind = state.editorKind;
-  const label = BOARD_KINDS[kind];
+  const label = itemLabel(kind);
   if (!title) {
     showMessage(`${label} title is required`, "error");
     elements.taskTitle.focus();
@@ -410,7 +417,7 @@ function updateTask(id, patch) {
 function confirmDelete(id) {
   const task = state.tasks.find((item) => item.id === id);
   if (!task) return;
-  elements.deleteDialog.querySelector("h2").textContent = `Delete ${kindOf(task)}?`;
+  elements.deleteDialog.querySelector("h2").textContent = `Delete ${itemLabel(kindOf(task)).toLowerCase()}?`;
   elements.deleteName.textContent = task.title;
   elements.deleteConfirm.dataset.id = id;
   elements.deleteDialog.showModal();
@@ -422,7 +429,7 @@ function deleteTask() {
   state.tasks = state.tasks.filter((task) => task.id !== id);
   saveTasks();
   elements.deleteDialog.close();
-  if (deleted) showMessage(`${BOARD_KINDS[kindOf(deleted)]} deleted`);
+  if (deleted) showMessage(`${itemLabel(kindOf(deleted))} deleted`);
   render();
 }
 
@@ -431,7 +438,7 @@ function openImportDialog(kind, exporting) {
   elements.importText.value = exporting
     ? JSON.stringify(state.tasks.filter((item) => kindOf(item) === kind), null, 2)
     : "";
-  elements.importDialog.querySelector("h2").textContent = `Import/export ${kind}s`;
+  elements.importDialog.querySelector("h2").textContent = `Import/export ${sections.get(kind).name}`;
   elements.importDialog.showModal();
   if (exporting) elements.importText.select();
 }
@@ -445,7 +452,7 @@ function importTasks(kind) {
     return;
   }
   if (!Array.isArray(parsed)) {
-    showMessage(`JSON must be an array of ${kind}s`, "error");
+    showMessage("JSON must be an array of items", "error");
     return;
   }
   const others = state.tasks.filter((item) => kindOf(item) !== kind);
@@ -458,13 +465,13 @@ function importTasks(kind) {
     }
   }
   if (parsed.length && !items.length) {
-    showMessage(`No importable ${kind}s in the JSON`, "error");
+    showMessage("No importable items for this category", "error");
     return;
   }
   state.tasks = [...others, ...items];
   saveTasks();
   elements.importDialog.close();
-  showMessage(`Imported ${items.length} ${kind}s`);
+  showMessage(`Imported ${items.length} items`);
   render();
 }
 
@@ -472,18 +479,20 @@ function clearDone(kind) {
   const before = state.tasks.length;
   state.tasks = state.tasks.filter((item) => item.status !== "done" || kindOf(item) !== kind);
   saveTasks();
-  showMessage(`Removed ${before - state.tasks.length} completed ${kind}s`);
+  showMessage(`Removed ${before - state.tasks.length} completed items`);
   render();
 }
 
-function setupSection(kind, label) {
+function setupSection(kind, name) {
+  const label = itemLabel(kind);
   const template = document.getElementById("kanban-section");
   const root = template.content.firstElementChild.cloneNode(true);
   root.id = kind + "-management";
   root.dataset.kind = kind;
-  root.querySelector("summary").textContent = label + "s";
+  root.querySelector("summary").textContent = name;
   const control = (name) => root.querySelector(`[data-control="${name}"]`);
   const section = {
+    name,
     root,
     board: control("board"),
     search: control("search"),
@@ -498,13 +507,13 @@ function setupSection(kind, label) {
   sections.set(kind, section);
 
   const create = control("new-task");
-  create.textContent = "New " + kind;
+  create.textContent = "New " + label.toLowerCase();
   create.addEventListener("click", () => openEditor(null, "backlog", kind));
-  section.board.setAttribute("aria-label", label + " board");
-  section.search.placeholder = `Search ${kind}s (/)`;
-  section.search.setAttribute("aria-label", `Search ${kind}s`);
-  section.sort.setAttribute("aria-label", `Sort ${kind}s`);
-  control("progress-label").textContent = label + " progress";
+  section.board.setAttribute("aria-label", name + " board");
+  section.search.placeholder = `Search ${name.toLowerCase()} (/)`;
+  section.search.setAttribute("aria-label", `Search ${name.toLowerCase()}`);
+  section.sort.setAttribute("aria-label", `Sort ${name.toLowerCase()}`);
+  control("progress-label").textContent = (label === "Item" ? name : label) + " progress";
   control("export-data").addEventListener("click", () => openImportDialog(kind, true));
   control("import-data").addEventListener("click", () => openImportDialog(kind, false));
   control("clear-done").addEventListener("click", () => clearDone(kind));
@@ -512,30 +521,28 @@ function setupSection(kind, label) {
   section.priorityFilter.addEventListener("change", render);
   section.sort.addEventListener("change", render);
   setupBoard(section.board, kind);
-
 }
 
 function loadCategorySettings() {
-  const kinds = Object.keys(BOARD_KINDS);
   try {
     const saved = JSON.parse(safeStorage()?.getItem(CATEGORY_SETTINGS_KEY) ?? "null");
     const order = Array.isArray(saved) ? saved : saved?.order;
-    const colors = Object.fromEntries(kinds.flatMap((kind) => {
-      const color = saved?.colors?.[kind];
-      return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? [[kind, color]] : [];
-    }));
-    if (Array.isArray(order) && order.length === kinds.length && kinds.every((kind) => order.includes(kind))) {
-      return { order, colors };
-    }
-    return { order: kinds, colors };
+    const colors = Object.fromEntries(Object.entries(saved?.colors ?? {}).filter(([, color]) =>
+      typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)));
+    return { order: Array.isArray(order) ? order : [], colors };
   } catch (_error) {
-    return { order: kinds, colors: {} };
+    return { order: [], colors: {} };
   }
+}
+
+function activeOrder(order) {
+  const active = categories.map(({ id }) => id);
+  return [...new Set([...order.filter((id) => active.includes(id)), ...active])];
 }
 
 function applyCategorySettings({ order, colors }, reorder) {
   const container = document.getElementById("board-sections");
-  for (const [index, kind] of order.entries()) {
+  for (const [index, kind] of activeOrder(order).entries()) {
     const { root } = sections.get(kind);
     root.style.setProperty("--category-background", colors[kind] || "");
     if (reorder) {
@@ -545,10 +552,41 @@ function applyCategorySettings({ order, colors }, reorder) {
   }
 }
 
+async function changeCategory(change, status) {
+  status.hidden = false;
+  status.textContent = "Saving…";
+  try {
+    const response = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) {
+      status.textContent = response.status < 500 ? await response.text() : "Could not save the category. Try again.";
+      return false;
+    }
+    status.hidden = true;
+    TaskSync.refresh();
+    return true;
+  } catch (_error) {
+    status.textContent = "Could not save the category. Try again.";
+    return false;
+  }
+}
+
 function setupCategorySettings() {
   const dialog = document.getElementById("category-dialog");
   const form = document.getElementById("category-form");
   const list = document.getElementById("category-order");
+  const newName = document.getElementById("new-category-name");
+  const add = document.getElementById("add-category");
+  const status = document.getElementById("category-status");
+  const deleteDialog = document.getElementById("category-delete-dialog");
+  const deleteForm = document.getElementById("category-delete-form");
+  const destination = document.getElementById("category-destination");
+  const deleteStatus = document.getElementById("category-delete-status");
+  let deleting;
   let settings = loadCategorySettings();
   let draft;
   applyCategorySettings(settings, true);
@@ -556,7 +594,7 @@ function setupCategorySettings() {
   function renderSettings() {
     list.textContent = "";
     for (const [index, kind] of draft.order.entries()) {
-      const label = BOARD_KINDS[kind] + "s";
+      const label = sections.get(kind).name;
       const item = document.createElement("li");
       item.tabIndex = -1;
       const row = document.createElement("div");
@@ -579,6 +617,21 @@ function setupCategorySettings() {
         });
         actions.appendChild(button);
       }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.setAttribute("aria-label", "Delete " + label + " category");
+      remove.disabled = categories.length < 2;
+      remove.addEventListener("click", () => {
+        deleting = kind;
+        document.getElementById("category-delete-title").textContent = `Delete ${label}?`;
+        deleteStatus.hidden = true;
+        destination.replaceChildren(...categories.filter(({ id }) => id !== kind)
+          .map(({ id, name }) => new Option(name, id)));
+        if (sections.has("task") && kind !== "task") destination.value = "task";
+        deleteDialog.showModal();
+      });
+      actions.appendChild(remove);
       row.append(name, actions);
       const colorRow = document.createElement("div");
       colorRow.className = "category-color";
@@ -608,14 +661,44 @@ function setupCategorySettings() {
   }
 
   document.getElementById("edit-category-order").addEventListener("click", () => {
-    draft = { order: [...settings.order], colors: { ...settings.colors } };
+    draft = { order: activeOrder(settings.order), colors: { ...settings.colors } };
+    newName.value = "";
+    status.hidden = true;
     renderSettings();
     dialog.showModal();
   });
   document.getElementById("cancel-category-order").addEventListener("click", () => dialog.close());
+  add.addEventListener("click", async () => {
+    const name = newName.value.trim();
+    if (!name) {
+      status.textContent = "Enter a category name.";
+      status.hidden = false;
+      newName.focus();
+      return;
+    }
+    add.disabled = true;
+    const saved = await changeCategory({ type: "create", id: "category-" + crypto.randomUUID(), name }, status);
+    add.disabled = false;
+    if (saved) newName.value = "";
+  });
+  newName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      add.click();
+    }
+  });
+  document.getElementById("cancel-category-delete").addEventListener("click", () => deleteDialog.close());
+  deleteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = deleteForm.querySelector('[type="submit"]');
+    button.disabled = true;
+    const saved = await changeCategory({ type: "delete", id: deleting, destination: destination.value }, deleteStatus);
+    button.disabled = false;
+    if (saved) deleteDialog.close();
+  });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const reordered = settings.order.some((kind, index) => kind !== draft.order[index]);
+    const reordered = activeOrder(settings.order).some((kind, index) => kind !== draft.order[index]);
     settings = draft;
     applyCategorySettings(settings, reordered);
     dialog.close();
@@ -630,6 +713,13 @@ function setupCategorySettings() {
     }
     showMessage("Category settings could only be saved for this page.", "error");
   });
+  return () => {
+    applyCategorySettings(settings, true);
+    if (dialog.open) {
+      draft.order = activeOrder(draft.order);
+      renderSettings();
+    }
+  };
 }
 
 function setupBoard(board, kind) {
@@ -642,7 +732,7 @@ function setupBoard(board, kind) {
     column.querySelector(".count").dataset.count = status;
     const add = column.querySelector("button");
     add.dataset.newStatus = status;
-    add.setAttribute("aria-label", `Add ${kind} to ${label}`);
+    add.setAttribute("aria-label", `Add ${itemLabel(kind).toLowerCase()} to ${label}`);
     add.addEventListener("click", () => openEditor(null, status, kind));
 
     column.addEventListener("dragover", (event) => {
@@ -676,7 +766,7 @@ function setupKeyboard() {
       return;
     }
     if (typing || document.querySelector("dialog[open]")) return;
-    const kind = event.target.closest(".board-section")?.dataset.kind || "task";
+    const kind = event.target.closest(".board-section")?.dataset.kind || (sections.has("task") ? "task" : categories[0].id);
     if (event.key === "n" || event.key === "N") {
       event.preventDefault();
       openEditor(null, "backlog", kind);
@@ -691,8 +781,7 @@ function setupKeyboard() {
 }
 
 function setupEvents() {
-  for (const [kind, label] of Object.entries(BOARD_KINDS)) setupSection(kind, label);
-  setupCategorySettings();
+  for (const { id, name } of categories) setupSection(id, name);
   elements.importSubmit.addEventListener("click", () => importTasks(elements.importDialog.dataset.kind));
 
   document.getElementById("cancel-task").addEventListener("click", closeEditor);
@@ -710,12 +799,29 @@ function setupEvents() {
 function initApp() {
   initElements();
   setupEvents();
+  const reorder = setupCategorySettings();
   render();
 
-  TaskSync.start(state.tasks, (tasks) => {
-    state.tasks = tasks.filter(isValidTask).map(normalizeTask);
-    render();
-  }, document.getElementById("sync-status"));
+  TaskSync.start(state.tasks, (tasks, incoming, changed) => {
+    const categoriesChanged = JSON.stringify(categories) !== JSON.stringify(incoming);
+    if (categoriesChanged) {
+      categories = incoming;
+      for (const [id, section] of sections) {
+        if (!categories.some((category) => category.id === id)) {
+          section.root.remove();
+          sections.delete(id);
+        }
+      }
+      for (const { id, name } of categories) {
+        if (!sections.has(id)) setupSection(id, name);
+      }
+      reorder();
+    }
+    if (changed || categoriesChanged) {
+      state.tasks = tasks.filter(isValidTask).map(normalizeTask);
+      render();
+    }
+  }, document.getElementById("sync-status"), true);
 
   window.addEventListener("beforeunload", saveTasks);
   window.addEventListener("pagehide", saveTasks);

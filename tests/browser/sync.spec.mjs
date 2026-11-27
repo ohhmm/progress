@@ -19,6 +19,7 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
   let taskId;
   let goalId;
   let ideaId;
+  let customItemId;
   try {
     await Promise.all([a.goto(new URL("/board", base).href), b.goto(new URL("/board", base).href)]);
     for (const page of [a, b]) {
@@ -111,9 +112,35 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await a.getByRole("button", { name: "Save changes" }).click();
     await expect(a.locator("#goal-management")).not.toHaveAttribute("style", /--category-background/);
     await expect(b.locator("#board-sections > details > summary")).toHaveText(["Ideas", "Goals", "Tasks"]);
+    const categoryName = "Research " + randomUUID();
+    const itemTitle = "Transferred " + randomUUID();
+    await a.getByRole("button", { name: "Edit categories" }).click();
+    await a.getByRole("textbox", { name: "Category name" }).fill(categoryName);
+    await a.getByRole("button", { name: "Add category" }).click();
+    await expect(a.getByRole("button", { name: `Delete ${categoryName} category` })).toBeVisible();
+    await a.locator("#cancel-category-order").click();
+    const desktopCategory = a.locator("#board-sections > details").filter({ has: a.locator("summary", { hasText: categoryName }) });
+    const mobileCategory = b.locator("#board-sections > details").filter({ has: b.locator("summary", { hasText: categoryName }) });
+    await expect(mobileCategory.locator("summary")).toBeVisible({ timeout: 15000 });
+    await desktopCategory.locator("summary").click();
+    await desktopCategory.getByRole("button", { name: "New item" }).click();
+    await a.locator("#task-title").fill(itemTitle);
+    await a.locator('#task-form button[type="submit"]').click();
+    customItemId = await desktopCategory.locator(".card").filter({ hasText: itemTitle }).getAttribute("data-id");
+    await mobileCategory.locator("summary").click();
+    await expect(mobileCategory.locator("h3", { hasText: itemTitle })).toBeVisible({ timeout: 15000 });
+    await a.getByRole("button", { name: "Edit categories" }).click();
+    await a.getByRole("button", { name: `Delete ${categoryName} category` }).click();
+    await a.getByLabel("Move its items to").selectOption("task");
+    await a.getByRole("button", { name: "Move items and delete" }).click();
+    await expect(desktopCategory).toHaveCount(0);
+    await a.locator("#cancel-category-order").click();
+    await expect(mobileCategory).toHaveCount(0, { timeout: 15000 });
+    await b.locator("#task-management summary").click();
+    await expect(b.locator("#task-management h3", { hasText: itemTitle })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
-    const ids = [taskId, goalId, ideaId].filter(Boolean);
+    const ids = [taskId, goalId, ideaId, customItemId].filter(Boolean);
     if (ids.length) {
       const response = await desktop.request.post(base + "/api/tasks", {
         headers: { Origin: new URL(base).origin },

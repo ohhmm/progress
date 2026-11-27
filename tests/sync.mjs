@@ -172,3 +172,36 @@ test("board login sets an optional persistent session and sign-out clears access
     headers: { Cookie: logout.headers.get("set-cookie").split(";")[0], Authorization: authorization }
   })).status, 401);
 });
+
+test("deleting a category moves its items and redirects delayed writes", async () => {
+  const id = "category-" + randomUUID();
+  const name = "Research " + randomUUID();
+  const existing = { ...task(), kind: id };
+  const delayed = { ...task(), kind: id };
+  const change = (body) => fetch(base + "/api/categories", {
+    method: "POST",
+    headers: { Authorization: authorization, Origin: base, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const remove = { type: "delete", id, destination: "task" };
+  try {
+    const create = { type: "create", id, name };
+    assert.equal((await change(create)).status, 204);
+    assert.equal((await change(create)).status, 204);
+    assert.equal((await api([operation("create", existing.id, existing)])).find(item => item.id === existing.id).kind, id);
+    assert.equal((await change(remove)).status, 204);
+    assert.equal((await change(remove)).status, 204);
+    const tasks = await api([operation("create", delayed.id, delayed)]);
+    for (const entry of [existing, delayed]) {
+      const moved = tasks.find(item => item.id === entry.id);
+      assert.equal(moved.title, entry.title);
+      assert.equal(moved.kind ?? "task", "task");
+    }
+    const response = await fetch(base + "/api/board", { headers: { Authorization: authorization } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).categories.some(category => category.id === id), false);
+  } finally {
+    await change(remove);
+    await api([existing, delayed].map(entry => operation("delete", entry.id)));
+  }
+});
