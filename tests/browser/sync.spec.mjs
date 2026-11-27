@@ -17,6 +17,7 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
   a.on("pageerror", error => errors.push(error.message));
   b.on("pageerror", error => errors.push(error.message));
   let taskId;
+  let secondTaskId;
   let goalId;
   let ideaId;
   let customItemId;
@@ -86,6 +87,21 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     const cardA = a.locator(".card").filter({ has: a.locator("h3", { hasText: title }) });
     taskId = await cardA.getAttribute("data-id");
     await expect(b.locator('#task-management [data-status="backlog"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
+    const secondTitle = "Rank anchor " + randomUUID();
+    await tasks.getByRole("button", { name: "New task" }).click();
+    await a.locator("#task-title").fill(secondTitle);
+    await a.locator('#task-form button[type="submit"]').click();
+    const secondCard = tasks.locator(".card").filter({ hasText: secondTitle });
+    secondTaskId = await secondCard.getAttribute("data-id");
+    const rankedTitles = (page) => page.locator('#task-management [data-status="backlog"] .card h3')
+      .filter({ hasText: /^(Sync verification|Rank anchor) / });
+    await expect(rankedTitles(b)).toHaveText([secondTitle, title], { timeout: 15000 });
+    await cardA.dragTo(secondCard, { targetPosition: { x: 20, y: 5 } });
+    await expect(rankedTitles(a)).toHaveText([title, secondTitle]);
+    await expect(rankedTitles(b)).toHaveText([title, secondTitle], { timeout: 15000 });
+    await b.reload();
+    await b.locator("#task-management summary").click();
+    await expect(rankedTitles(b)).toHaveText([title, secondTitle]);
     await cardA.locator(".status-select").selectOption("doing");
     await expect(b.locator('#task-management [data-status="doing"] .card h3', { hasText: title })).toBeVisible({ timeout: 15000 });
     await b.reload();
@@ -140,7 +156,7 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await expect(b.locator("#task-management h3", { hasText: itemTitle })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
-    const ids = [taskId, goalId, ideaId, customItemId].filter(Boolean);
+    const ids = [taskId, secondTaskId, goalId, ideaId, customItemId].filter(Boolean);
     if (ids.length) {
       const response = await desktop.request.post(base + "/api/tasks", {
         headers: { Origin: new URL(base).origin },

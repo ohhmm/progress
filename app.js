@@ -1,4 +1,4 @@
-"use strict";
+import { compareRank, isRank, rankBetween, rankOf } from "./rank.js";
 
 const STORAGE_KEY = "taskflow:v1";
 const STATUSES = [
@@ -21,6 +21,7 @@ const state = {
 };
 
 const elements = {};
+let draggedItem;
 
 function initElements() {
   Object.assign(elements, {
@@ -131,6 +132,7 @@ function normalizeTask(task) {
   const priority = ["high", "medium", "low"].includes(task.priority) ? task.priority : "medium";
   return {
     ...(kindOf(task) !== "task" && { kind: task.kind }),
+    ...(isRank(task.rank) && { rank: task.rank }),
     id: task.id,
     title: task.title.trim().slice(0, 120),
     notes: String(task.notes || "").slice(0, 1000),
@@ -181,21 +183,13 @@ function filteredTasks(items, { search, priorityFilter, sort }) {
     (priority === "all" || task.priority === priority) && searchWeight(task, term));
 
   const compare = {
-    manual: () => 0,
+    manual: compareRank,
     due: (a, b) => dueWeight(a) - dueWeight(b),
     priority: (a, b) => priorityWeight(a.priority) - priorityWeight(b.priority),
     created: (a, b) => b.created - a.created
   }[sort.value] || (() => 0);
 
-  if (sort.value !== "manual") {
-    tasks.sort((a, b) => {
-      const result = compare(a, b);
-      if (result !== 0) return result;
-      return a.title.localeCompare(b.title);
-    });
-  }
-
-  return tasks;
+  return tasks.sort((a, b) => compare(a, b) || a.title.localeCompare(b.title));
 }
 
 function statusColor(status) {
@@ -329,10 +323,14 @@ function card(task) {
   article.appendChild(actions);
 
   article.addEventListener("dragstart", (event) => {
+    draggedItem = task;
+    event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", task.id);
     article.classList.add("dragging");
   });
   article.addEventListener("dragend", () => {
+    draggedItem = null;
+    clearDropMarker();
     article.classList.remove("dragging");
   });
 
@@ -397,7 +395,9 @@ function upsertTask(event) {
       showMessage(`${label} updated`);
     }
   } else {
-    state.tasks.unshift(normalizeTask({ ...patch, kind, id: uid(), created: Date.now(), completedAt: patch.status === "done" ? Date.now() : null }));
+    const first = columnItems(kind, patch.status)[0];
+    const rank = rankBetween(null, first ? rankOf(first) : null);
+    state.tasks.unshift(normalizeTask({ ...patch, kind, rank, id: uid(), created: Date.now(), completedAt: patch.status === "done" ? Date.now() : null }));
     showMessage(`${label} created`);
   }
 
@@ -722,6 +722,25 @@ function setupCategorySettings() {
   };
 }
 
+function columnItems(kind, status) {
+  return state.tasks.filter((item) => kindOf(item) === kind && item.status === status).sort(compareRank);
+}
+
+function clearDropMarker() {
+  document.querySelector(".drop-target")?.classList.remove("drop-target");
+  document.querySelector(".drop-before")?.classList.remove("drop-before");
+  document.querySelector(".drop-after")?.classList.remove("drop-after");
+}
+
+function dropPosition(column, y, id) {
+  const cards = [...column.querySelectorAll(".card")].filter((card) => card.dataset.id !== id);
+  const before = cards.find((card) => {
+    const bounds = card.getBoundingClientRect();
+    return y < bounds.top + bounds.height / 2;
+  });
+  return { before, last: cards.at(-1) };
+}
+
 function setupBoard(board, kind) {
   const template = document.getElementById("kanban-column");
   for (const { id: status, label } of STATUSES) {
@@ -736,20 +755,45 @@ function setupBoard(board, kind) {
     add.addEventListener("click", () => openEditor(null, status, kind));
 
     column.addEventListener("dragover", (event) => {
+      if (!draggedItem || kindOf(draggedItem) !== kind) return;
       event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const { before, last } = dropPosition(column, event.clientY, draggedItem.id);
+      clearDropMarker();
       column.classList.add("drop-target");
+      if (before) before.classList.add("drop-before");
+      else last?.classList.add("drop-after");
     });
-    column.addEventListener("dragleave", () => {
-      column.classList.remove("drop-target");
+    column.addEventListener("dragleave", (event) => {
+      if (!column.contains(event.relatedTarget)) clearDropMarker();
     });
     column.addEventListener("drop", (event) => {
       event.preventDefault();
-      column.classList.remove("drop-target");
+      clearDropMarker();
       const id = event.dataTransfer.getData("text/plain");
-      const item = state.tasks.find((entry) => entry.id === id);
-      if (item && kindOf(item) === kind) {
-        updateTask(id, { status, completedAt: status === "done" ? Date.now() : null });
+      const item = draggedItem?.id === id && state.tasks.find((entry) => entry.id === id);
+      draggedItem = null;
+      if (!item || kindOf(item) !== kind) return;
+      const { before, last } = dropPosition(column, event.clientY, item.id);
+      const items = columnItems(kind, status);
+      const ordered = items.filter((entry) => entry.id !== item.id);
+      const anchor = before ?? last;
+      const index = anchor
+        ? ordered.findIndex((entry) => entry.id === anchor.dataset.id) + (before ? 0 : 1)
+        : ordered.length;
+      sections.get(kind).sort.value = "manual";
+      if (item.status === status && items[index]?.id === item.id) {
+        render();
+        return;
       }
+      const lower = ordered[index - 1];
+      const upper = ordered[index];
+      const rank = rankBetween(lower ? rankOf(lower) : null, upper ? rankOf(upper) : null);
+      updateTask(item.id, {
+        rank,
+        status,
+        completedAt: status === "done" ? (item.completedAt ?? Date.now()) : null
+      });
     });
     board.appendChild(column);
   }
