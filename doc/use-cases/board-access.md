@@ -15,6 +15,17 @@ API clients can use HTTP Basic Auth over HTTPS with the username `taskflow` and 
 
 For deployment setup, see [Configure viewer access](../../README.md#configure-viewer-access).
 
-## Planned passkey access for My Ideas
+## Passkey sign-in on the dashboard
 
-Open **My Ideas** and use a saved passkey. On first use, verify your account through Cloudflare Access and set up a passkey. Progress can read your email from the verified token and use the verified account ID to keep private ideas accessible to their owner. Shared ideas stay on the shared board. [Cloudflare Access passkeys](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/passkeys/)
+Open the existing Progress dashboard and browse its default content, including sample items when a preview is shown. Opening the dashboard and browsing it require no passkey prompt. Use blue accents and clearly label sample content.
+
+| Use case | What happens |
+| --- | --- |
+| Attempt a write | Adding, editing, moving, or deleting an item and changing categories all use the same sign-in flow. If a session is needed, pause the write and keep the user's draft or selected action. |
+| Use a saved passkey | Explain why sign-in is needed and offer **Use a passkey**. After verification, return the user to the pending action. |
+| Set up a passkey | From the same sign-in screen, offer **Create a passkey** for the first visit. Explain that the device will save a passkey for Progress before showing its prompt. After setup, return the user to the pending action. |
+| The device finds no passkey | Show the same screen with a clear choice to create a passkey or try a device or password manager with an existing one. |
+| Cancel or retry | Leave the dashboard and draft available. Apply the write only after successful sign-in and confirmation of any action that normally requires it. |
+| Make another change | Reuse the active session. If it expires, the next write attempt opens the same flow. |
+
+Progress identifies a passkey account with an internal ID. The passkey flow requires no email or social account. The dashboard checks write permission after sign-in and before applying any pending change.
