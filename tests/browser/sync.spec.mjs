@@ -1,14 +1,15 @@
 import { test, expect, webkit, devices } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-const base = process.env.BASE || "http://127.0.0.1:8787";
+const base = process.env.BASE || "https://127.0.0.1:8787";
+const ignoreHTTPSErrors = ["127.0.0.1", "localhost"].includes(new URL(base).hostname);
 const credentials = { username: "taskflow", password: process.env.BOARD_PASSWORD || "local-sync-test" };
 
 test("desktop moves sync to iPhone WebKit, including reload and offline retry", async ({ browser }) => {
   test.setTimeout(90000);
-  const desktop = await browser.newContext({ httpCredentials: credentials });
+  const desktop = await browser.newContext({ httpCredentials: credentials, ignoreHTTPSErrors });
   const mobileBrowser = await webkit.launch();
-  const mobile = await mobileBrowser.newContext({ ...devices["iPhone 13"], httpCredentials: credentials });
+  const mobile = await mobileBrowser.newContext({ ...devices["iPhone 13"], httpCredentials: credentials, ignoreHTTPSErrors });
   const a = await desktop.newPage();
   const b = await mobile.newPage();
   const title = "Sync verification " + randomUUID();
@@ -19,6 +20,11 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
   let goalId;
   try {
     await Promise.all([a.goto(new URL("/board", base).href), b.goto(new URL("/board", base).href)]);
+    for (const page of [a, b]) {
+      await page.getByLabel("Password").fill(credentials.password);
+      await page.getByLabel("Keep me signed in for 30 days").check();
+      await page.getByRole("button", { name: "Sign in" }).click();
+    }
     await expect(a.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(a.locator("#new-task")).toBeHidden();

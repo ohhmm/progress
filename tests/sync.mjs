@@ -130,7 +130,45 @@ test("landing is public and both board roles require sign-in", async () => {
   for (const path of ["/board", "/index.html", "/app.js", "/api/tasks"]) {
     const response = await fetch(base + path);
     assert.equal(response.status, 401);
-    assert.match(response.headers.get("www-authenticate"), /^Basic /);
+    if (path.endsWith(".js") || path.startsWith("/api/")) {
+      assert.match(response.headers.get("www-authenticate"), /^Basic /);
+    } else {
+      assert.match(await response.text(), /Keep me signed in for 30 days/);
+    }
   }
   assert.equal((await fetch(base + "/board", { headers: { Authorization: authorization } })).status, 200);
+});
+
+test("board login sets an optional persistent session and sign-out clears access", async () => {
+  const origin = new URL(base).origin;
+  const form = new URLSearchParams({
+    username: "taskflow", password: process.env.BOARD_PASSWORD || "local-sync-test"
+  });
+  const login = (body, requestOrigin = origin) => fetch(base + "/login", {
+    method: "POST", headers: { Origin: requestOrigin }, body, redirect: "manual"
+  });
+  assert.equal((await login(form, "https://example.com")).status, 403);
+  assert.equal((await login(new URLSearchParams({ username: "taskflow", password: "wrong" }))).status, 401);
+  const session = await login(form);
+  assert.equal(session.status, 303);
+  assert.doesNotMatch(session.headers.get("set-cookie"), /Max-Age/);
+
+  form.set("remember", "yes");
+  const remembered = await login(form);
+  assert.equal(remembered.status, 303);
+  assert.equal(remembered.headers.get("location"), "/board");
+  const cookie = remembered.headers.get("set-cookie");
+  assert.match(cookie, /Max-Age=2592000; Path=\/; Secure; HttpOnly; SameSite=Lax/);
+  const token = cookie.split(";")[0];
+  assert.equal((await fetch(base + "/board", { headers: { Cookie: token } })).status, 200);
+  assert.equal((await fetch(base + "/api/tasks", { headers: { Cookie: token } })).status, 200);
+  assert.equal((await fetch(base + "/board", { headers: { Cookie: token.replace(/\.(.)/, (_, char) => "." + (char === "A" ? "B" : "A")) } })).status, 401);
+
+  const logout = await fetch(base + "/logout", {
+    method: "POST", headers: { Origin: origin, Cookie: token }, redirect: "manual"
+  });
+  assert.equal(logout.status, 303);
+  assert.equal((await fetch(base + "/board", {
+    headers: { Cookie: logout.headers.get("set-cookie").split(";")[0], Authorization: authorization }
+  })).status, 401);
 });

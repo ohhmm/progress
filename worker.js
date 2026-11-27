@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { boardSignIn, handleBoardSignIn, hasBoardAccess } from "./board-auth.js";
 import { hasViewerAccess, renderViewerBoard } from "./viewer.js";
 
 export default {
@@ -17,23 +18,22 @@ export default {
     if (!env.BOARD_PASSWORD) {
       return new Response("Set the BOARD_PASSWORD Worker secret to activate the shared board.", { status: 503 });
     }
-    const supplied = request.headers.get("Authorization") || "";
-    const passwordBytes = new TextEncoder().encode("taskflow:" + env.BOARD_PASSWORD);
-    const expected = "Basic " + btoa(Array.from(passwordBytes, byte => String.fromCharCode(byte)).join(""));
-    const digest = value => crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-    const [actualHash, expectedHash] = await Promise.all([digest(supplied), digest(expected)]);
-    const actual = new Uint8Array(actualHash);
-    const expectedBytes = new Uint8Array(expectedHash);
-    let difference = 0;
-    for (let i = 0; i < actual.length; i++) difference |= actual[i] ^ expectedBytes[i];
-    if (difference) {
+    if (url.pathname === "/login" || url.pathname === "/logout") {
+      return handleBoardSignIn(request, env.BOARD_PASSWORD, url);
+    }
+    const openingBoard = ["/board", "/index.html"].includes(url.pathname) && (request.method === "GET" || request.method === "HEAD");
+    if (!await hasBoardAccess(request, env.BOARD_PASSWORD, url.origin)) {
+      if (openingBoard) return boardSignIn();
       return new Response("Sign in to Taskflow", {
         status: 401,
         headers: { "WWW-Authenticate": 'Basic realm="Taskflow", charset="UTF-8"', "Cache-Control": "no-store" }
       });
     }
-    if (url.pathname === "/board" && (request.method === "GET" || request.method === "HEAD")) {
-      return env.ASSETS.fetch(new Request(new URL("/index.html", url), { method: request.method }));
+    if (openingBoard) {
+      const response = await env.ASSETS.fetch(new Request(new URL("/index.html", url), { method: request.method }));
+      const board = new Response(response.body, response);
+      board.headers.set("Cache-Control", "no-store");
+      return board;
     }
     if (url.pathname !== "/api/tasks") return env.ASSETS.fetch(request);
     if (request.method === "POST" && request.headers.get("Origin") !== url.origin) {
