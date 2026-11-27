@@ -226,14 +226,6 @@ function showMessage(text, type = "info") {
 function render() {
   const tasks = filteredTasks();
   const goals = state.tasks.filter(isGoal);
-  elements.goalList.textContent = "";
-  for (const goal of goals) elements.goalList.appendChild(card(goal));
-  if (!goals.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty-state";
-    empty.textContent = "No goals yet";
-    elements.goalList.appendChild(empty);
-  }
   const allTasks = state.tasks.filter((item) => !isGoal(item));
   const total = allTasks.length;
   const done = allTasks.filter((task) => task.status === "done").length;
@@ -246,32 +238,33 @@ function render() {
   elements.progressBar.style.width = percent + "%";
   elements.progressText.textContent = percent + "% complete";
 
-  elements.board.querySelectorAll(".column-body").forEach((body) => {
-    body.innerHTML = "";
-  });
-
-  STATUSES.forEach((status) => {
-    const column = document.querySelector(`[data-status="${status.id}"] .column-body`);
-    const tasksForStatus = tasks.filter((task) => task.status === status.id);
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = tasksForStatus.length ? "" : `No ${status.label.toLowerCase()} tasks`;
-    if (tasksForStatus.length) empty.hidden = true;
-    column.appendChild(empty);
-
-    tasksForStatus.forEach((task) => {
-      column.appendChild(card(task));
-    });
-  });
-
-  refreshCounts(tasks);
+  renderBoard(elements.goalList, goals, "goal");
+  renderBoard(elements.board, tasks, "task");
   saveTasks();
+}
+
+function renderBoard(board, items, kind) {
+  for (const column of board.children) {
+    const status = column.dataset.status;
+    const cards = items.filter((item) => item.status === status);
+    const body = column.querySelector(".column-body");
+    column.querySelector(".count").textContent = cards.length;
+    body.textContent = "";
+    if (cards.length) {
+      for (const item of cards) body.appendChild(card(item));
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = `No ${status} ${kind}s`;
+      body.appendChild(empty);
+    }
+  }
 }
 
 function card(task) {
   const article = document.createElement("article");
   article.className = "card";
-  article.draggable = !isGoal(task);
+  article.draggable = true;
   article.dataset.id = task.id;
   article.setAttribute("tabindex", "0");
 
@@ -490,18 +483,19 @@ function clearDone() {
   render();
 }
 
-function refreshCounts(tasks) {
-  const counts = STATUSES.reduce((result, status) => {
-    result[status.id] = tasks.filter((task) => task.status === status.id).length;
-    return result;
-  }, {});
-  document.querySelectorAll("[data-count]").forEach((node) => {
-    node.textContent = counts[node.dataset.count] || 0;
-  });
-}
+function setupBoard(board, kind) {
+  const template = document.getElementById("kanban-column");
+  for (const { id: status, label } of STATUSES) {
+    const column = template.content.firstElementChild.cloneNode(true);
+    column.dataset.status = status;
+    column.setAttribute("aria-label", label);
+    column.querySelector(".column-title").textContent = label;
+    column.querySelector(".count").dataset.count = status;
+    const add = column.querySelector("button");
+    add.dataset.newStatus = status;
+    add.setAttribute("aria-label", `Add ${kind} to ${label}`);
+    add.addEventListener("click", () => openEditor(null, status, kind));
 
-function setupDragAndDrop() {
-  document.querySelectorAll(".column").forEach((column) => {
     column.addEventListener("dragover", (event) => {
       event.preventDefault();
       column.classList.add("drop-target");
@@ -513,10 +507,13 @@ function setupDragAndDrop() {
       event.preventDefault();
       column.classList.remove("drop-target");
       const id = event.dataTransfer.getData("text/plain");
-      const status = column.dataset.status;
-      if (id && status) updateTask(id, { status, completedAt: status === "done" ? Date.now() : null });
+      const item = state.tasks.find((entry) => entry.id === id);
+      if (item && isGoal(item) === (kind === "goal")) {
+        updateTask(id, { status, completedAt: status === "done" ? Date.now() : null });
+      }
     });
-  });
+    board.appendChild(column);
+  }
 }
 
 function setupKeyboard() {
@@ -560,9 +557,6 @@ function setupEvents() {
   document.getElementById("close-import").addEventListener("click", () => elements.importDialog.close());
   document.getElementById("cancel-delete").addEventListener("click", () => elements.deleteDialog.close());
 
-  document.querySelectorAll("[data-new-status]").forEach((button) => {
-    button.addEventListener("click", () => openEditor(null, button.dataset.newStatus));
-  });
   elements.taskForm.addEventListener("submit", upsertTask);
   elements.taskDialog.addEventListener("close", () => {
     state.selectedTaskId = null;
@@ -581,7 +575,8 @@ function setupEvents() {
     render();
   });
 
-  setupDragAndDrop();
+  setupBoard(elements.goalList, "goal");
+  setupBoard(elements.board, "task");
   setupKeyboard();
 }
 
