@@ -1,4 +1,4 @@
-# Taskflow
+# Progress
 
 A shared Kanban task tracker on Cloudflare Workers. Tasks persist in a SQLite-backed Durable Object shared by visitors to the board.
 
@@ -12,25 +12,28 @@ printf 'BOARD_PASSWORD=local-sync-test\n' > .dev.vars
 npm run dev -- --local-protocol https
 ```
 
-Open the displayed URL in Chrome, Edge, Firefox, or Safari. Choose **Editor sign-in** and use the username `taskflow` with the password from `.dev.vars`.
+Open the displayed URL in Chrome, Edge, Firefox, or Safari. Choose **Open editor** and enter the board password from `.dev.vars` when prompted.
 
 With the local HTTPS Worker running, run `npm run test:browser`.
 
 ## Deploy
 
+Connect Wrangler to your Cloudflare account before deploying.
+
 ```sh
-npx wrangler login
 npx wrangler secret put BOARD_PASSWORD
 npm run deploy
 ```
 
-The Worker name is `taskflow`. Deployment creates its durable board storage and packages the browser assets. The public landing page at `/` links to the source and accepts $100 deployment requests through GitHub Issues. The editor at `/board` and the task API require the configured board password. Use the same deployed URL and sign in as `taskflow` on every device. Use HTTPS in production.
+The Worker name is `taskflow`. Deployment creates its durable board storage and packages the browser assets. The public landing page at `/` links to the source and accepts $100 deployment requests through GitHub Issues. The editor at `/board` and the task API require the configured board password. Use the same HTTPS deployment URL on every device.
 
-### Social sign-in
+See [Board access use cases](doc/use-cases/board-access.md) for editors, viewers, and API clients.
 
-On the Taskflow custom hostname, create a Cloudflare Access self-hosted application for `/view`. Enable the social identity providers viewers can choose from, such as GitHub or Google, and allow sign-in through those providers. Everyone admitted by that policy can read the shared board, including task notes.
+### Configure viewer access
 
-Set `VIEWER_ACCESS_ISSUER` to your Access team URL (for example, `https://your-team.cloudflareaccess.com`) and `VIEWER_ACCESS_AUD` to the application's audience tag in the Worker environment. Keep the landing page, editor, and task API outside the viewer Access application. **New task** and **Edit** in the viewer open the existing editor sign-in.
+On the Progress custom hostname, create a Cloudflare Access self-hosted application for `/view`. Allow viewers to use an identity provider such as GitHub or Google.
+
+Set `VIEWER_ACCESS_ISSUER` to your Access team URL (for example, `https://your-team.cloudflareaccess.com`) and `VIEWER_ACCESS_AUD` to the application's audience tag in the Worker environment. Keep the landing page, editor, and task API outside the viewer Access application.
 
 ## Synchronization
 

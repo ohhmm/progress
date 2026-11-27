@@ -121,11 +121,18 @@ test("API rejects cross-origin writes and invalid batches atomically", async () 
   assert.equal((await api()).some(t => t.id === created.id), false);
 });
 
-test("landing is public and both board roles require sign-in", async () => {
+test("landing is public and both board roles require access", async () => {
   const landing = await fetch(base + "/");
   assert.equal(landing.status, 200);
-  assert.match(await landing.text(), /Deployment service · \$100/);
-  assert.equal((await fetch(base + "/view")).status, 403);
+  const home = await landing.text();
+  assert.match(home, /Deployment service · \$100/);
+  assert.doesNotMatch(home, /View shared board/);
+  const viewer = await fetch(base + "/view");
+  assert.equal(viewer.status, 403);
+  const unavailable = await viewer.text();
+  assert.match(unavailable, /Shared viewing is unavailable on this deployment/);
+  assert.match(unavailable, /Back to Progress/);
+  assert.doesNotMatch(unavailable, /type="password"/);
   assert.equal((await fetch(base + "/view", { method: "POST" })).status, 405);
   for (const path of ["/board", "/index.html", "/app.js", "/api/tasks"]) {
     const response = await fetch(base + path);
@@ -133,28 +140,28 @@ test("landing is public and both board roles require sign-in", async () => {
     if (path.endsWith(".js") || path.startsWith("/api/")) {
       assert.match(response.headers.get("www-authenticate"), /^Basic /);
     } else {
-      assert.match(await response.text(), /Keep me signed in for 30 days/);
+      assert.match(await response.text(), /Remember this browser for 30 days/);
     }
   }
   assert.equal((await fetch(base + "/board", { headers: { Authorization: authorization } })).status, 200);
 });
 
-test("board login sets an optional persistent session and sign-out clears access", async () => {
+test("editor access can persist and ending the session clears access", async () => {
   const origin = new URL(base).origin;
   const form = new URLSearchParams({
     username: "taskflow", password: process.env.BOARD_PASSWORD || "local-sync-test"
   });
-  const login = (body, requestOrigin = origin) => fetch(base + "/login", {
+  const openBoard = (body, requestOrigin = origin) => fetch(base + "/access", {
     method: "POST", headers: { Origin: requestOrigin }, body, redirect: "manual"
   });
-  assert.equal((await login(form, "https://example.com")).status, 403);
-  assert.equal((await login(new URLSearchParams({ username: "taskflow", password: "wrong" }))).status, 401);
-  const session = await login(form);
+  assert.equal((await openBoard(form, "https://example.com")).status, 403);
+  assert.equal((await openBoard(new URLSearchParams({ username: "taskflow", password: "wrong" }))).status, 401);
+  const session = await openBoard(form);
   assert.equal(session.status, 303);
   assert.doesNotMatch(session.headers.get("set-cookie"), /Max-Age/);
 
   form.set("remember", "yes");
-  const remembered = await login(form);
+  const remembered = await openBoard(form);
   assert.equal(remembered.status, 303);
   assert.equal(remembered.headers.get("location"), "/board");
   const cookie = remembered.headers.get("set-cookie");
@@ -164,12 +171,16 @@ test("board login sets an optional persistent session and sign-out clears access
   assert.equal((await fetch(base + "/api/tasks", { headers: { Cookie: token } })).status, 200);
   assert.equal((await fetch(base + "/board", { headers: { Cookie: token.replace(/\.(.)/, (_, char) => "." + (char === "A" ? "B" : "A")) } })).status, 401);
 
-  const logout = await fetch(base + "/logout", {
+  const viewer = await fetch(base + "/view", { headers: { Authorization: authorization, Cookie: token } });
+  assert.equal(viewer.status, 403);
+  assert.doesNotMatch(await viewer.text(), /Read-only board/);
+
+  const ended = await fetch(base + "/session/end", {
     method: "POST", headers: { Origin: origin, Cookie: token }, redirect: "manual"
   });
-  assert.equal(logout.status, 303);
+  assert.equal(ended.status, 303);
   assert.equal((await fetch(base + "/board", {
-    headers: { Cookie: logout.headers.get("set-cookie").split(";")[0], Authorization: authorization }
+    headers: { Cookie: ended.headers.get("set-cookie").split(";")[0], Authorization: authorization }
   })).status, 401);
 });
 

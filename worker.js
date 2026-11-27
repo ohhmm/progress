@@ -1,33 +1,33 @@
 import { isRank } from "./rank.js";
 import { DurableObject } from "cloudflare:workers";
-import { boardSignIn, handleBoardSignIn, hasBoardAccess } from "./board-auth.js";
-import { hasViewerAccess, renderViewerBoard } from "./viewer.js";
+import { boardAccessPage, handleBoardSession, hasBoardAccess } from "./board-auth.js";
+import { hasViewerAccess, renderViewerBoard, viewerAccessPage, viewerConfigured } from "./viewer.js";
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
-      return env.ASSETS.fetch(new Request(new URL("/landing.html", url), { method: request.method }));
+      const landing = await env.ASSETS.fetch(new Request(new URL("/landing.html", url), { method: request.method }));
+      if (viewerConfigured(env)) return landing;
+      return new HTMLRewriter().on("[data-viewer-entry]", { element(node) { node.remove(); } }).transform(landing);
     }
     if (url.pathname === "/view") {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { Allow: "GET" } });
-      if (!await hasViewerAccess(request, env)) {
-        return new Response("Social sign-in required", { status: 403, headers: { "Cache-Control": "no-store" } });
-      }
+      if (!await hasViewerAccess(request, env)) return viewerAccessPage(viewerConfigured(env));
       return serveBoard(request, env, true);
     }
     if (!env.BOARD_PASSWORD) {
       return new Response("Set the BOARD_PASSWORD Worker secret to activate the shared board.", { status: 503 });
     }
-    if (url.pathname === "/login" || url.pathname === "/logout") {
-      return handleBoardSignIn(request, env.BOARD_PASSWORD, url);
+    if (url.pathname === "/access" || url.pathname === "/session/end") {
+      return handleBoardSession(request, env.BOARD_PASSWORD, url);
     }
     const openingBoard = ["/board", "/index.html"].includes(url.pathname) && (request.method === "GET" || request.method === "HEAD");
     if (!await hasBoardAccess(request, env.BOARD_PASSWORD, url.origin)) {
-      if (openingBoard) return boardSignIn();
-      return new Response("Sign in to Taskflow", {
+      if (openingBoard) return boardAccessPage();
+      return new Response("Editor access required", {
         status: 401,
-        headers: { "WWW-Authenticate": 'Basic realm="Taskflow", charset="UTF-8"', "Cache-Control": "no-store" }
+        headers: { "WWW-Authenticate": 'Basic realm="Progress", charset="UTF-8"', "Cache-Control": "no-store" }
       });
     }
     if (openingBoard) {

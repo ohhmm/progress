@@ -26,8 +26,8 @@ test("desktop moves sync to iPhone WebKit, including reload and offline retry", 
     await Promise.all([a.goto(new URL("/board", base).href), b.goto(new URL("/board", base).href)]);
     for (const page of [a, b]) {
       await page.getByLabel("Password").fill(credentials.password);
-      await page.getByLabel("Keep me signed in for 30 days").check();
-      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByLabel("Remember this browser for 30 days").check();
+      await page.getByRole("button", { name: "Open board" }).click();
     }
     await expect(a.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });
     await expect(b.locator("#sync-status")).toHaveText("All changes saved", { timeout: 20000 });

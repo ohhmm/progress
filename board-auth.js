@@ -37,12 +37,12 @@ export async function hasBoardAccess(request, password, origin) {
   return Boolean(supplied && await matches(supplied, "Basic " + toBase64(encoder.encode("taskflow:" + password))));
 }
 
-export function boardSignIn(error = "") {
+export function boardAccessPage(error = false) {
   return new Response(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in to Taskflow</title>
+<title>Open the Progress board</title>
 <style>
   :root { color-scheme: light dark; font: 1rem system-ui, sans-serif; }
   main { max-width: 24rem; margin: 10vh auto; padding: 1.5rem; }
@@ -53,13 +53,13 @@ export function boardSignIn(error = "") {
   button { padding: .5rem; }
 </style>
 <main>
-  <h1>Sign in to Taskflow</h1>
-  ${error ? `<p role="alert">${error}</p>` : ""}
-  <form action="/login" method="post">
-    <label>Username <input name="username" value="taskflow" autocomplete="username" required></label>
-    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
-    <label class="remember"><input type="checkbox" name="remember" value="yes"> Keep me signed in for 30 days</label>
-    <button type="submit">Sign in</button>
+  <h1>Open the Progress board</h1>
+  ${error ? `<p role="alert">That board password is incorrect.</p>` : ""}
+  <form action="/access" method="post">
+    <input type="hidden" name="username" value="taskflow" autocomplete="username">
+    <label>Password <input type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <label class="remember"><input type="checkbox" name="remember" value="yes"> Remember this browser for 30 days</label>
+    <button type="submit">Open board</button>
   </form>
 </main>
 </html>`, {
@@ -68,20 +68,20 @@ export function boardSignIn(error = "") {
   });
 }
 
-export async function handleBoardSignIn(request, password, url) {
+export async function handleBoardSession(request, password, url) {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
   }
   if (request.headers.get("Origin") !== url.origin) return new Response("Forbidden", { status: 403 });
 
-  let cookie = "signed-out";
-  if (url.pathname === "/login") {
+  let cookie = "closed";
+  if (url.pathname === "/access") {
     if (request.headers.get("Content-Type")?.split(";")[0] !== "application/x-www-form-urlencoded") {
       return new Response("Unsupported form encoding", { status: 415 });
     }
     const form = new URLSearchParams(await request.text());
     if (form.get("username") !== "taskflow" || !await matches(form.get("password") || "", password)) {
-      return boardSignIn("The username or password is incorrect.");
+      return boardAccessPage(true);
     }
     const remember = form.get("remember") === "yes";
     const expires = Math.floor(Date.now() / 1000) + (remember ? rememberedSeconds : sessionSeconds);
@@ -89,7 +89,7 @@ export async function handleBoardSignIn(request, password, url) {
     cookie = expires + "." + toBase64(new Uint8Array(signature));
     if (remember) cookie += "; Max-Age=" + rememberedSeconds;
   }
-  // A session-only marker also suppresses browser-cached Basic Auth after sign-out.
+  // A session-only marker also suppresses browser-cached Basic Auth after the session ends.
   return new Response(null, {
     status: 303,
     headers: { Location: "/board", "Set-Cookie": cookieName + "=" + cookie + "; " + cookieFlags, "Cache-Control": "no-store" }
